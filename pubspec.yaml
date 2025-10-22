@@ -1,0 +1,42 @@
+name: metly
+description: Metly — Made in India with ❤ Gold
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.2.1
+  dio: ^5.7.0
+  shared_preferences: ^2.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_native_splash: ^2.4.1
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo/icon.png
+
+# Splash (dark, no branding image file needed)
+flutter_native_splash:
+  color: "#111111"
+  android: true
+  ios: false
+  web: true
+  android_12:
+    color: "#111111"
+
+# Launcher icons (uses assets/logo/icon.png)
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/logo/icon.png
+  adaptive_icon_background: "#111111"
