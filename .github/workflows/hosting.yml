@@ -28,8 +28,7 @@ jobs:
       - name: Install Firebase CLI
         run: npm i -g firebase-tools
 
-      # IMPORTANT: No tokens in this file. We only reference GitHub Secrets.
       - name: Deploy to Firebase Hosting
-        run: firebase deploy --only hosting --project metly-87960515
+        run: firebase deploy --only hosting --project metly-62916
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
