@@ -975,6 +975,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late AiMode _mode;
   late final TextEditingController _keyCtrl;
   late final TextEditingController _modelCtrl;
+  late final TextEditingController _proxyUrlCtrl;
+  late final TextEditingController _proxyTokCtrl;
   bool _subActive = false;
   bool _lifeActive = false;
 
@@ -982,10 +984,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _mode = AiModeX.fromIdx(widget.prefs.getInt(Cfg.prefsAiMode) ?? 0);
-    _keyCtrl =
-        TextEditingController(widget.prefs.getString(Cfg.prefsKeyApi) ?? '');
+
+    _keyCtrl = TextEditingController(
+      text: widget.prefs.getString(Cfg.prefsKeyApi) ?? '',
+    );
     _modelCtrl = TextEditingController(
-        widget.prefs.getString(Cfg.prefsKeyModel) ?? Cfg.defaultModel);
+      text: widget.prefs.getString(Cfg.prefsKeyModel) ?? Cfg.defaultModel,
+    );
+    _proxyUrlCtrl = TextEditingController(
+      text: widget.prefs.getString(Cfg.prefsProxyUrl) ?? '',
+    );
+    _proxyTokCtrl = TextEditingController(
+      text: widget.prefs.getString(Cfg.prefsProxyTok) ?? '',
+    );
+
     _subActive = widget.prefs.getBool(Cfg.entSubActive) ?? false;
     _lifeActive = widget.prefs.getBool(Cfg.entLifetime) ?? false;
   }
@@ -994,6 +1006,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _keyCtrl.dispose();
     _modelCtrl.dispose();
+    _proxyUrlCtrl.dispose();
+    _proxyTokCtrl.dispose();
     super.dispose();
   }
 
@@ -1001,234 +1015,141 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await widget.prefs.setInt(Cfg.prefsAiMode, _mode.idx);
     await widget.prefs.setString(Cfg.prefsKeyApi, _keyCtrl.text.trim());
     await widget.prefs.setString(Cfg.prefsKeyModel, _modelCtrl.text.trim());
+    await widget.prefs.setString(Cfg.prefsProxyUrl, _proxyUrlCtrl.text.trim());
+    await widget.prefs.setString(Cfg.prefsProxyTok, _proxyTokCtrl.text.trim());
     await widget.prefs.setBool(Cfg.entSubActive, _subActive);
     await widget.prefs.setBool(Cfg.entLifetime, _lifeActive);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings saved')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Settings saved')));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const MetlyAppBar(
-        titleTop: 'Settings',
-        titleBottom: 'AI & Entitlements',
-        showMenu: false,
-      ),
+          titleTop: 'Settings', titleBottom: 'AI & Proxy', showMenu: false),
       backgroundColor: const Color(0xFF0E0E0E),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Text('AI Mode',
-              style: GoogleFonts.poppins(
-                  fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w700)),
+      body: ListView(padding: const EdgeInsets.all(24), children: [
+        Text('AI Mode',
+            style: GoogleFonts.poppins(
+                fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<AiMode>(
+          value: _mode,
+          dropdownColor: const Color(0xFF1A1A1A),
+          decoration: const InputDecoration(
+            enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.white24)),
+            focusedBorder:
+                OutlineInputBorder(borderSide: BorderSide(color: Cfg.gold)),
+          ),
+          items: AiMode.values
+              .map((m) => DropdownMenuItem(value: m, child: Text(m.label)))
+              .toList(),
+          onChanged: (m) => setState(() => _mode = m ?? AiMode.off),
+        ),
+        const SizedBox(height: 16),
+        if (_mode == AiMode.metlyCloud) ...[
+          Text('Metly AI Proxy (Cloudflare Worker)',
+              style: GoogleFonts.poppins(fontSize: 16, color: Colors.white70)),
           const SizedBox(height: 8),
-          DropdownButtonFormField<AiMode>(
-            value: _mode,
-            dropdownColor: const Color(0xFF1A1A1A),
+          TextFormField(
+            controller: _proxyUrlCtrl,
+            style: const TextStyle(color: Colors.white),
             decoration: const InputDecoration(
+              labelText: 'Proxy URL (…/v1/chat/completions)',
+              labelStyle: TextStyle(color: Colors.white70),
               enabledBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: Colors.white24)),
               focusedBorder:
                   OutlineInputBorder(borderSide: BorderSide(color: Cfg.gold)),
             ),
-            items: AiMode.values
-                .map((m) => DropdownMenuItem(value: m, child: Text(m.label)))
-                .toList(),
-            onChanged: (m) => setState(() => _mode = m ?? AiMode.off),
           ),
-          const SizedBox(height: 16),
-          if (_mode == AiMode.userApi) ...[
-            Text('OpenRouter API',
-                style:
-                    GoogleFonts.poppins(fontSize: 16, color: Colors.white70)),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _keyCtrl,
-              obscureText: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'API Key',
-                labelStyle: TextStyle(color: Colors.white70),
-                enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder:
-                    OutlineInputBorder(borderSide: BorderSide(color: Cfg.gold)),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _modelCtrl,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Model (e.g., openai/gpt-4o-mini)',
-                labelStyle: TextStyle(color: Colors.white70),
-                enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder:
-                    OutlineInputBorder(borderSide: BorderSide(color: Cfg.gold)),
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Divider(color: Colors.white12),
           const SizedBox(height: 12),
-          Text('Entitlements (stub for now)',
-              style: GoogleFonts.poppins(
-                  fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            value: _subActive,
-            activeColor: Cfg.gold,
-            title: Text('Metly AI subscription • ${Cfg.priceMonthly}'),
-            subtitle: const Text('Enables Metly AI mode'),
-            onChanged: (v) => setState(() => _subActive = v),
-          ),
-          SwitchListTile(
-            value: _lifeActive,
-            activeColor: Cfg.gold,
-            title: Text('Lifetime unlock for user API • ${Cfg.priceLifetime}'),
-            subtitle: const Text('Enables “Use My API” mode'),
-            onChanged: (v) => setState(() => _lifeActive = v),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: Cfg.gold,
-              foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+          TextFormField(
+            controller: _proxyTokCtrl,
+            obscureText: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              labelText: 'Proxy Token (METLY_PROXY_TOKEN)',
+              labelStyle: TextStyle(color: Colors.white70),
+              enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24)),
+              focusedBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: Cfg.gold)),
             ),
-            onPressed: _save,
-            icon: const Icon(Icons.save_outlined),
-            label: const Text('Save'),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Note: These are local toggles for development. '
-            'We will wire real Google Play Billing (subscriptions + one-time purchase) later. '
-            'App remains fully usable without AI.',
-            style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/* ──────────────────────────────────────────────────────────────────────────────
-   PAYWALL SCREEN (stub; shows options & routes to Settings)
-────────────────────────────────────────────────────────────────────────────── */
-class PaywallScreen extends StatelessWidget {
-  final SharedPreferences prefs;
-  const PaywallScreen({super.key, required this.prefs});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const MetlyAppBar(
-        titleTop: 'Unlock AI',
-        titleBottom: 'Metly AI • Use My API',
-        showMenu: false,
-      ),
-      backgroundColor: const Color(0xFF0E0E0E),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            _PayTile(
-              title: 'Metly AI',
-              subtitle: 'On-demand explanations • ${Cfg.priceMonthly}',
-              icon: Icons.auto_awesome,
-              onTap: () {
-                prefs.setInt(Cfg.prefsAiMode, AiMode.metlyCloud.idx);
-                Navigator.pushReplacementNamed(context, '/settings');
-              },
+        if (_mode == AiMode.userApi) ...[
+          const SizedBox(height: 16),
+          Text('OpenRouter API',
+              style: GoogleFonts.poppins(fontSize: 16, color: Colors.white70)),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _keyCtrl,
+            obscureText: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              labelText: 'API Key',
+              labelStyle: TextStyle(color: Colors.white70),
+              enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24)),
+              focusedBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: Cfg.gold)),
             ),
-            const SizedBox(height: 12),
-            _PayTile(
-              title: 'Use My API',
-              subtitle: 'Bring your own key • ${Cfg.priceLifetime}',
-              icon: Icons.vpn_key_outlined,
-              onTap: () {
-                prefs.setInt(Cfg.prefsAiMode, AiMode.userApi.idx);
-                Navigator.pushReplacementNamed(context, '/settings');
-              },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _modelCtrl,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              labelText: 'Model (e.g., openai/gpt-4o-mini)',
+              labelStyle: TextStyle(color: Colors.white70),
+              enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24)),
+              focusedBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: Cfg.gold)),
             ),
-            const Spacer(),
-            Text(
-              'You can continue using Metly without AI.',
-              style: GoogleFonts.poppins(color: Colors.white70),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Cfg.gold.withOpacity(0.6)),
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Back'),
-            ),
-          ],
+          ),
+        ],
+        const SizedBox(height: 16),
+        Divider(color: Colors.white12),
+        const SizedBox(height: 12),
+        Text('Entitlements (dev stubs)',
+            style: GoogleFonts.poppins(
+                fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          value: _subActive,
+          activeColor: Cfg.gold,
+          title: Text('Metly AI subscription • ${Cfg.priceMonthly}'),
+          subtitle: const Text('Enables Metly AI mode'),
+          onChanged: (v) => setState(() => _subActive = v),
         ),
-      ),
-    );
-  }
-}
-
-class _PayTile extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final VoidCallback onTap;
-  const _PayTile({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.onTap,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      tileColor: const Color(0xFF141414),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      leading: Icon(icon, color: Cfg.gold, size: 28),
-      title:
-          Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
-      subtitle:
-          Text(subtitle, style: GoogleFonts.poppins(color: Colors.white70)),
-      trailing: FilledButton(
-        style: FilledButton.styleFrom(
-          backgroundColor: Cfg.gold,
-          foregroundColor: Colors.black,
+        SwitchListTile(
+          value: _lifeActive,
+          activeColor: Cfg.gold,
+          title: Text('Lifetime unlock • ${Cfg.priceLifetime}'),
+          subtitle: const Text('Enables “Use My API” mode'),
+          onChanged: (v) => setState(() => _lifeActive = v),
         ),
-        onPressed: onTap,
-        child: const Text('Select'),
-      ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+              backgroundColor: Cfg.gold,
+              foregroundColor: Colors.black,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 22, vertical: 14)),
+          onPressed: _save,
+          icon: const Icon(Icons.save_outlined),
+          label: const Text('Save'),
+        ),
+        const SizedBox(height: 10),
+        Text(
+            'Note: These toggles are for development only. We’ll wire real Google Play Billing later.',
+            style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12)),
+      ]),
     );
   }
-}
-
-/* ──────────────────────────────────────────────────────────────────────────────
-   HELPERS
-────────────────────────────────────────────────────────────────────────────── */
-String _timeFmt(DateTime t) {
-  final hh = t.hour.toString().padLeft(2, '0');
-  final mm = t.minute.toString().padLeft(2, '0');
-  return '$hh:$mm IST';
-}
-
-String _fmt(double v) {
-  final s = v.toStringAsFixed(0);
-  if (s.length <= 3) return s;
-  final last3 = s.substring(s.length - 3);
-  String rest = s.substring(0, s.length - 3);
-  final parts = <String>[];
-  while (rest.length > 2) {
-    parts.insert(0, rest.substring(rest.length - 2));
-    rest = rest.substring(0, rest.length - 2);
-  }
-  if (rest.isNotEmpty) parts.insert(0, rest);
-  return '${parts.join(',')},$last3';
 }
