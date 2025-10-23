@@ -40,6 +40,10 @@ class Cfg {
   static const String prefsKeyApi = 'openrouter_api_key';
   static const String prefsKeyModel = 'openrouter_model';
 
+  // Proxy prefs (kept even if not used yet)
+  static const String prefsProxyUrl = 'metly_proxy_url';
+  static const String prefsProxyTok = 'metly_proxy_token';
+
   // Entitlements (stubs now; real billing later)
   static const String entSubActive = 'ent_sub_active'; // Metly AI ₹99/mo
   static const String entLifetime = 'ent_lifetime_active'; // Use My API ₹999
@@ -1152,4 +1156,109 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ]),
     );
   }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   PAYWALL (stub)
+────────────────────────────────────────────────────────────────────────────── */
+class PaywallScreen extends StatelessWidget {
+  final SharedPreferences prefs;
+  const PaywallScreen({super.key, required this.prefs});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: const MetlyAppBar(
+          titleTop: 'Unlock AI',
+          titleBottom: 'Metly AI • Use My API',
+          showMenu: false),
+      backgroundColor: const Color(0xFF0E0E0E),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(children: [
+          _PayTile(
+            title: 'Metly AI',
+            subtitle: 'On-demand explanations • ${Cfg.priceMonthly}',
+            icon: Icons.auto_awesome,
+            onTap: () {
+              prefs.setInt(Cfg.prefsAiMode, AiMode.metlyCloud.idx);
+              Navigator.pushReplacementNamed(context, '/settings');
+            },
+          ),
+          const SizedBox(height: 12),
+          _PayTile(
+            title: 'Use My API',
+            subtitle: 'Bring your own key • ${Cfg.priceLifetime}',
+            icon: Icons.vpn_key_outlined,
+            onTap: () {
+              prefs.setInt(Cfg.prefsAiMode, AiMode.userApi.idx);
+              Navigator.pushReplacementNamed(context, '/settings');
+            },
+          ),
+          const Spacer(),
+          Text('You can continue using Metly without AI.',
+              style: GoogleFonts.poppins(color: Colors.white70)),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: Cfg.gold.withOpacity(0.6)),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Back'),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _PayTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _PayTile(
+      {required this.title,
+      required this.subtitle,
+      required this.icon,
+      required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      tileColor: const Color(0xFF141414),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      leading: Icon(icon, color: Cfg.gold, size: 28),
+      title:
+          Text(title, style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+      subtitle:
+          Text(subtitle, style: GoogleFonts.poppins(color: Colors.white70)),
+      trailing: FilledButton(
+          style: FilledButton.styleFrom(
+              backgroundColor: Cfg.gold, foregroundColor: Colors.black),
+          onPressed: onTap,
+          child: const Text('Select')),
+    );
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────────
+   HELPERS
+────────────────────────────────────────────────────────────────────────────── */
+String _timeFmt(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} IST';
+
+String _fmt(double v) {
+  // Indian numbering format (e.g., 1,23,456)
+  final s = v.toStringAsFixed(0);
+  if (s.length <= 3) return s;
+  final last3 = s.substring(s.length - 3);
+  String rest = s.substring(0, s.length - 3);
+  final parts = <String>[];
+  while (rest.length > 2) {
+    parts.insert(0, rest.substring(rest.length - 2));
+    rest = rest.substring(0, rest.length - 2);
+  }
+  if (rest.isNotEmpty) parts.insert(0, rest);
+  return '${parts.join(',')},$last3';
 }
