@@ -1,3 +1,5 @@
 {
-  "projects": { "default": "metly-62916" }
+  "projects": {
+    "default": "metly-62916"
+  }
 }
