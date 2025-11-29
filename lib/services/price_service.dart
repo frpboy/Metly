@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:dio/dio.dart';
 import '../models/price_model.dart';
 
 abstract class PriceProvider {
@@ -39,7 +40,7 @@ class MockPriceProvider implements PriceProvider {
 class RealPriceProvider implements PriceProvider {
   final Dio _dio = Dio();
   // TODO: Add API Key in Cfg or Settings
-  final String _apiKey = 'YOUR_API_KEY'; 
+  final String _apiKey = 'YOUR_API_KEY';
 
   @override
   Future<PriceSnapshot> latest(Metal metal) async {

@@ -3,12 +3,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../models/price_model.dart';
+import '../models/price_model.dart';
 import '../utils/formatters.dart';
 
 /* ════════════════════════════════════════════════════════════════════════════
    AI CLIENTS
 ════════════════════════════════════════════════════════════════════════════ */
-class OpenRouterClient {
+abstract class AiClient {
+  Future<String> explainSignals({
+    required PriceSnapshot gold,
+    required SignalResult goldSig,
+    required PriceSnapshot silver,
+    required SignalResult silverSig,
+  });
+}
+
+class OpenRouterClient implements AiClient {
   final Dio _dio;
   final SharedPreferences prefs;
   OpenRouterClient(this.prefs)
@@ -60,7 +70,7 @@ class OpenRouterClient {
 }
 
 /// Cloudflare Worker proxy -> OpenRouter (Metly AI mode)
-class ProxyAiClient {
+class ProxyAiClient implements AiClient {
   final Dio _dio;
   final SharedPreferences prefs;
   ProxyAiClient(this.prefs)
