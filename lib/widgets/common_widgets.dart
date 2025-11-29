@@ -102,7 +102,7 @@ class PlatformLinksRow extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget btn(String label) => OutlinedButton(
         style: OutlinedButton.styleFrom(
-            side: BorderSide(color: Cfg.gold.withOpacity(0.5)),
+            side: BorderSide(color: Cfg.gold.withValues(alpha: 0.5)),
             foregroundColor: Colors.white),
         onPressed: () {},
         child: Text(label));

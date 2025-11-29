@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import '../config/app_config.dart';
 import '../models/price_model.dart';
-import '../models/price_model.dart';
 import '../utils/formatters.dart';
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -35,6 +34,7 @@ class OpenRouterClient implements AiClient {
   String? get apiKey => prefs.getString(Cfg.prefsKeyApi);
   String get model => prefs.getString(Cfg.prefsKeyModel) ?? Cfg.defaultModel;
 
+  @override
   Future<String> explainSignals({
     required PriceSnapshot gold,
     required SignalResult goldSig,
@@ -83,6 +83,7 @@ class ProxyAiClient implements AiClient {
   String? get _tok => prefs.getString(Cfg.prefsProxyTok);
   String get model => prefs.getString(Cfg.prefsKeyModel) ?? Cfg.defaultModel;
 
+  @override
   Future<String> explainSignals({
     required PriceSnapshot gold,
     required SignalResult goldSig,

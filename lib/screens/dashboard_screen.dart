@@ -67,7 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (gold == null || silver == null) return;
 
     final AiMode mode = aiMode;
-    final ai = (mode == AiMode.metlyCloud)
+    final AiClient ai = (mode == AiMode.metlyCloud)
         ? ProxyAiClient(widget.prefs)
         : OpenRouterClient(widget.prefs);
 
@@ -111,8 +111,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 selected: sipEnabled,
                 onSelected: (v) => setState(() => sipEnabled = v),
                 label: const Text('SIP Tip'),
-                selectedColor: Cfg.gold.withOpacity(0.25),
-                side: BorderSide(color: Cfg.gold.withOpacity(0.35))),
+                selectedColor: Cfg.gold.withValues(alpha: 0.25),
+                side: BorderSide(color: Cfg.gold.withValues(alpha: 0.35))),
             const Spacer(),
             FilledButton.icon(
                 onPressed: aiBusy ? null : _askAI,
@@ -120,7 +120,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     backgroundColor: canUseAI ? Colors.black : Colors.black12,
                     side: BorderSide(
                         color: (canUseAI ? Cfg.gold : Colors.white24)
-                            .withOpacity(0.6)),
+                            .withValues(alpha: 0.6)),
                     foregroundColor: Colors.white),
                 icon: Icon(aiBusy ? Icons.hourglass_top : Icons.auto_awesome),
                 label: Text(aiBusy
@@ -167,8 +167,8 @@ class _AiInsight extends StatelessWidget {
                   color: Cfg.gold, fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           SelectableText(text,
-              style:
-                  GoogleFonts.poppins(color: Colors.white.withOpacity(0.92))),
+              style: GoogleFonts.poppins(
+                  color: Colors.white.withValues(alpha: 0.92))),
         ]));
   }
 }

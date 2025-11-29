@@ -20,7 +20,7 @@ class SignalCard extends StatelessWidget {
       decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: border.withOpacity(0.6), width: 1.4)),
+          border: Border.all(color: border.withValues(alpha: 0.6), width: 1.4)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title,
             style: GoogleFonts.poppins(
@@ -37,7 +37,7 @@ class SignalCard extends StatelessWidget {
         const SizedBox(height: 10),
         Text(result.reason,
             style: GoogleFonts.poppins(
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 fontWeight: FontWeight.w500)),
       ]),
     );
@@ -60,7 +60,7 @@ class _Fact extends StatelessWidget {
               style: GoogleFonts.poppins(
                   color: Colors.white, fontWeight: FontWeight.w600)),
         ])),
-        backgroundColor: Colors.white.withOpacity(0.06),
+        backgroundColor: Colors.white.withValues(alpha: 0.06),
         side: const BorderSide(color: Colors.white24));
   }
 }

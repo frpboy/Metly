@@ -38,8 +38,10 @@ class MockPriceProvider implements PriceProvider {
 }
 
 class RealPriceProvider implements PriceProvider {
+  // ignore: unused_field
   final Dio _dio = Dio();
   // TODO: Add API Key in Cfg or Settings
+  // ignore: unused_field
   final String _apiKey = 'YOUR_API_KEY';
 
   @override
