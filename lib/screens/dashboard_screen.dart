@@ -19,7 +19,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final PriceProvider provider = MockPriceProvider();
+  final PriceProvider provider = RealPriceProvider();
   PriceSnapshot? gold;
   PriceSnapshot? silver;
   bool sipEnabled = false;

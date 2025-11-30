@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
 import 'config/app_config.dart';
 import 'screens/home_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -11,6 +14,7 @@ import 'screens/paywall_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   final prefs = await SharedPreferences.getInstance();
   runApp(MetlyApp(prefs: prefs));
 }
@@ -18,6 +22,7 @@ void main() async {
 class MetlyApp extends StatelessWidget {
   final SharedPreferences prefs;
   const MetlyApp({super.key, required this.prefs});
+
   @override
   Widget build(BuildContext context) {
     final theme = ThemeData(
