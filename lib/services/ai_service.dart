@@ -20,9 +20,14 @@ abstract class AiClient {
 class OpenRouterClient implements AiClient {
   final Dio _dio;
   final SharedPreferences prefs;
+
   OpenRouterClient(this.prefs)
       : _dio = Dio(BaseOptions(
-          baseUrl: 'https://openrouter.ai/api',
+          baseUrl: prefs.getString(Cfg.prefsProxyUrl)?.trim().isNotEmpty == true
+              ? prefs
+                  .getString(Cfg.prefsProxyUrl)!
+                  .replaceAll(RegExp(r'/+$'), '') // strip trailing slash
+              : 'https://openrouter.ai/api/v1',
           connectTimeout: const Duration(seconds: 20),
           receiveTimeout: const Duration(seconds: 30),
           headers: {
@@ -31,8 +36,13 @@ class OpenRouterClient implements AiClient {
             if (!kIsWeb) 'HTTP-Referer': 'metly.app',
           },
         ));
-  String? get apiKey => prefs.getString(Cfg.prefsKeyApi);
+
+  String? get _proxyTok => prefs.getString(Cfg.prefsProxyTok);
+  String? get _apiKey => prefs.getString(Cfg.prefsKeyApi);
   String get model => prefs.getString(Cfg.prefsKeyModel) ?? Cfg.defaultModel;
+
+  bool get _useProxy =>
+      (prefs.getString(Cfg.prefsProxyUrl)?.trim().isNotEmpty ?? false);
 
   @override
   Future<String> explainSignals({
@@ -41,84 +51,37 @@ class OpenRouterClient implements AiClient {
     required PriceSnapshot silver,
     required SignalResult silverSig,
   }) async {
-    final key = apiKey;
-    if (key == null || key.trim().isEmpty) {
-      throw Exception('OpenRouter API key not set. Add it in Settings.');
-    }
     final ddG = gold.drawdownPct.toStringAsFixed(2);
     final ddS = silver.drawdownPct.toStringAsFixed(2);
-    const sys =
-        'You are a financial assistant for Indian digital gold & silver investors. Summarize signals in <150 words, bullets. Rules: Gold BUY if ≥2% below recent high; Silver BUY if ≥5% below. After Dhanteras/Diwali spikes, confirm threshold before BUY. End with a one-line takeaway.';
-    final usr =
-        'Today:\n- Gold: ₹${fmt(gold.price)} / ${gold.unit}; high ₹${fmt(gold.recentHigh)}; drawdown $ddG%; signal: ${goldSig.signal.name.toUpperCase()} (${goldSig.reason})\n- Silver: ₹${fmt(silver.price)} / ${silver.unit}; high ₹${fmt(silver.recentHigh)}; drawdown $ddS%; signal: ${silverSig.signal.name.toUpperCase()} (${silverSig.reason})\nExplain rationale for both and comment on SIP suitability.';
+
+    final sys = 'You are a financial assistant for Indian gold/silver…';
+    final usr = '''
+Today:
+- Gold price: ₹${fmt(gold.price)} / ${gold.unit}; high: ₹${fmt(gold.recentHigh)}; drawdown: $ddG%; signal: ${goldSig.signal.name.toUpperCase()} (${goldSig.reason})
+- Silver price: ₹${fmt(silver.price)} / ${silver.unit}; high: ₹${fmt(silver.recentHigh)}; drawdown: $ddS%; signal: ${silverSig.signal.name.toUpperCase()} (${silverSig.reason})
+Explain briefly with bullets.''';
+
     final body = {
       'model': model,
       'messages': [
         {'role': 'system', 'content': sys},
-        {'role': 'user', 'content': usr}
+        {'role': 'user', 'content': usr},
       ],
       'temperature': 0.3,
-      'max_tokens': 300
+      'max_tokens': 300,
     };
-    final res = await _dio.post('/v1/chat/completions',
-        data: body,
-        options: Options(headers: {'Authorization': 'Bearer $key'}));
+
+    final headers = <String, String>{
+      if (_useProxy) 'Authorization': 'Bearer ${_proxyTok ?? ''}',
+      if (!_useProxy) 'Authorization': 'Bearer ${_apiKey ?? ''}',
+    };
+
+    final path = _useProxy ? '' : '/chat/completions';
+
+    final res =
+        await _dio.post(path, data: body, options: Options(headers: headers));
     final content = res.data?['choices']?[0]?['message']?['content'];
     if (content is String && content.trim().isNotEmpty) return content.trim();
     throw Exception('Empty AI response');
-  }
-}
-
-/// Cloudflare Worker proxy -> OpenRouter (Metly AI mode)
-class ProxyAiClient implements AiClient {
-  final Dio _dio;
-  final SharedPreferences prefs;
-  ProxyAiClient(this.prefs)
-      : _dio = Dio(BaseOptions(
-          connectTimeout: const Duration(seconds: 20),
-          receiveTimeout: const Duration(seconds: 30),
-          headers: {'Content-Type': 'application/json'},
-        ));
-  String? get _url => prefs.getString(Cfg.prefsProxyUrl);
-  String? get _tok => prefs.getString(Cfg.prefsProxyTok);
-  String get model => prefs.getString(Cfg.prefsKeyModel) ?? Cfg.defaultModel;
-
-  @override
-  Future<String> explainSignals({
-    required PriceSnapshot gold,
-    required SignalResult goldSig,
-    required PriceSnapshot silver,
-    required SignalResult silverSig,
-  }) async {
-    final url = _url?.trim();
-    final tok = _tok?.trim();
-    if (url == null || url.isEmpty) {
-      throw Exception('Proxy URL not set. Add it in Settings.');
-    }
-    if (tok == null || tok.isEmpty) {
-      throw Exception('Proxy token not set. Add it in Settings.');
-    }
-    final ddG = gold.drawdownPct.toStringAsFixed(2);
-    final ddS = silver.drawdownPct.toStringAsFixed(2);
-    const sys =
-        'You are a financial assistant for Indian digital gold & silver investors. Summarize signals in <150 words, bullets. Rules: Gold BUY if ≥2% below recent high; Silver BUY if ≥5% below. After Dhanteras/Diwali spikes, confirm threshold before BUY. End with a one-line takeaway.';
-    final usr =
-        'Today:\n- Gold: ₹${fmt(gold.price)} / ${gold.unit}; high ₹${fmt(gold.recentHigh)}; drawdown $ddG%; signal: ${goldSig.signal.name.toUpperCase()} (${goldSig.reason})\n- Silver: ₹${fmt(silver.price)} / ${silver.unit}; high ₹${fmt(silver.recentHigh)}; drawdown $ddS%; signal: ${silverSig.signal.name.toUpperCase()} (${silverSig.reason})\nExplain rationale for both and comment on SIP suitability.';
-    final body = {
-      'model': model,
-      'messages': [
-        {'role': 'system', 'content': sys},
-        {'role': 'user', 'content': usr}
-      ],
-      'temperature': 0.3,
-      'max_tokens': 300
-    };
-    final res = await _dio.post(url,
-        data: body,
-        options: Options(headers: {'Authorization': 'Bearer $tok'}));
-    final data = res.data;
-    final content = data?['choices']?[0]?['message']?['content'];
-    if (content is String && content.trim().isNotEmpty) return content.trim();
-    throw Exception('Empty AI response from proxy');
   }
 }

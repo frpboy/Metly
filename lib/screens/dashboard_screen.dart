@@ -66,10 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     if (gold == null || silver == null) return;
 
-    final AiMode mode = aiMode;
-    final AiClient ai = (mode == AiMode.metlyCloud)
-        ? ProxyAiClient(widget.prefs)
-        : OpenRouterClient(widget.prefs);
+    final AiClient ai = OpenRouterClient(widget.prefs);
 
     try {
       setState(() {

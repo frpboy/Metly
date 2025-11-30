@@ -21,8 +21,8 @@ class Cfg {
   static const String prefsKeyModel = 'openrouter_model';
 
   // NEW: proxy prefs (Metly AI)
-  static const String prefsProxyUrl = 'metly_proxy_url';
-  static const String prefsProxyTok = 'metly_proxy_token';
+  static const String prefsProxyUrl = 'proxy_url';
+  static const String prefsProxyTok = 'proxy_token';
 
   // Entitlements (dev stubs for pricing)
   // ₹99/mo for Metly AI (creator’s API)
