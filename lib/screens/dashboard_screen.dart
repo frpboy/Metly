@@ -1,16 +1,18 @@
+```dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../config/app_config.dart';
-import '../models/price_model.dart';
 import '../services/price_service.dart';
 import '../services/ai_service.dart';
+import '../models/price_snapshot.dart';
+import '../models/watchlist_item.dart';
+import '../models/portfolio_item.dart';
+import '../services/firestore_service.dart';
 import '../widgets/common_widgets.dart';
 import '../widgets/signal_card.dart';
 
-/* ════════════════════════════════════════════════════════════════════════════
-   DASHBOARD
-════════════════════════════════════════════════════════════════════════════ */
 class DashboardScreen extends StatefulWidget {
   final SharedPreferences prefs;
   const DashboardScreen({super.key, required this.prefs});
@@ -20,25 +22,13 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   late final PriceProvider provider = RealPriceProvider(widget.prefs);
+  final FirestoreService _firestore = FirestoreService();
   PriceSnapshot? gold;
   PriceSnapshot? silver;
-  bool sipEnabled = false;
   bool loading = false;
-  String? aiText;
   bool aiBusy = false;
-
-  AiMode get aiMode =>
-      AiModeX.fromIdx(widget.prefs.getInt(Cfg.prefsAiMode) ?? 0);
-  bool get hasSub => widget.prefs.getBool(Cfg.entSubActive) ?? false;
-  bool get hasLife => widget.prefs.getBool(Cfg.entLifetime) ?? false;
-  String? get userKey => widget.prefs.getString(Cfg.prefsKeyApi);
-
-  bool get canUseAI => switch (aiMode) {
-        AiMode.off => false,
-        AiMode.metlyCloud => hasSub,
-        AiMode.userApi =>
-          (hasLife && (userKey != null && userKey!.trim().isNotEmpty)),
-      };
+  String? aiText;
+  bool sipEnabled = false;
 
   @override
   void initState() {
@@ -59,27 +49,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _askAI() async {
-    if (!canUseAI) {
-      if (!mounted) return;
-      Navigator.pushNamed(context, '/paywall');
-      return;
-    }
     if (gold == null || silver == null) return;
-
-    final AiClient ai = OpenRouterClient(widget.prefs);
-
+    final client = OpenRouterClient(widget.prefs);
+    final gSig = evaluateSignal(gold!, now: DateTime.now());
+    final sSig = evaluateSignal(silver!, now: DateTime.now());
+    setState(() => aiBusy = true);
     try {
-      setState(() {
-        aiBusy = true;
-        aiText = null;
-      });
-      final gSig = evaluateSignal(gold!, now: DateTime.now());
-      final sSig = evaluateSignal(silver!, now: DateTime.now());
-      final text = await ai.explainSignals(
+      final text = await client.explainSignals(
           gold: gold!, goldSig: gSig, silver: silver!, silverSig: sSig);
       setState(() => aiText = text);
     } catch (e) {
-      setState(() => aiText = 'AI error: ${e.toString()}');
+      setState(() => aiText = 'AI error: $e');
     } finally {
       setState(() => aiBusy = false);
     }
@@ -114,29 +94,68 @@ class _DashboardScreenState extends State<DashboardScreen> {
             FilledButton.icon(
                 onPressed: aiBusy ? null : _askAI,
                 style: FilledButton.styleFrom(
-                    backgroundColor: canUseAI ? Colors.black : Colors.black12,
-                    side: BorderSide(
-                        color: (canUseAI ? Cfg.gold : Colors.white24)
-                            .withValues(alpha: 0.6)),
-                    foregroundColor: Colors.white),
+                    backgroundColor: Colors.black, foregroundColor: Colors.white),
                 icon: Icon(aiBusy ? Icons.hourglass_top : Icons.auto_awesome),
-                label: Text(aiBusy
-                    ? 'Thinking…'
-                    : (canUseAI ? 'Ask AI' : 'Unlock AI'))),
+                label: Text(aiBusy ? 'Thinking…' : 'Ask AI')),
           ]),
           const SizedBox(height: 12),
           if (gold != null)
-            SignalCard(
-                snapshot: gold!, result: evaluateSignal(gold!, now: now)),
+            SignalCard(snapshot: gold!, result: evaluateSignal(gold!, now: now)),
           if (silver != null)
-            SignalCard(
-                snapshot: silver!, result: evaluateSignal(silver!, now: now)),
+            SignalCard(snapshot: silver!, result: evaluateSignal(silver!, now: now)),
           const SizedBox(height: 12),
           if (sipEnabled)
-            Text('SIP tip: Invest regularly to average risk and returns.',
+            const Text('SIP tip: Invest regularly to average risk and returns.',
                 textAlign: TextAlign.center,
-                style:
-                    GoogleFonts.poppins(color: Colors.white70, fontSize: 13)),
+                style: TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 16),
+          // Watchlist Section
+          const Text('Watchlist', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Cfg.gold)),
+          const SizedBox(height: 8),
+          StreamBuilder<List<WatchlistItem>>(
+            stream: _firestore.watchlistStream(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const CircularProgressIndicator();
+              final items = snapshot.data!;
+              if (items.isEmpty) return const Text('No watchlist items', style: TextStyle(color: Colors.white70));
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: items.length,
+                itemBuilder: (c, i) {
+                  final it = items[i];
+                  return ListTile(
+                    title: Text('${it.metal.toUpperCase()} @ ₹${it.targetPrice.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
+                    subtitle: Text('Added: ${it.addedAt.toLocal().toString().split('.').first}', style: const TextStyle(color: Colors.white54)),
+                  );
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          // Portfolio Section
+          const Text('Portfolio', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Cfg.gold)),
+          const SizedBox(height: 8),
+          StreamBuilder<List<PortfolioItem>>(
+            stream: _firestore.portfolioStream(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const CircularProgressIndicator();
+              final items = snapshot.data!;
+              if (items.isEmpty) return const Text('No portfolio items', style: TextStyle(color: Colors.white70));
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: items.length,
+                itemBuilder: (c, i) {
+                  final it = items[i];
+                  return ListTile(
+                    title: Text('${it.metal.toUpperCase()} holdings: ${it.amount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
+                    subtitle: Text('Avg price: ₹${it.avgPrice.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white54)),
+                  );
+                },
+              );
+            },
+          ),
           const SizedBox(height: 16),
           const PlatformLinksRow(),
           const SizedBox(height: 16),
@@ -169,3 +188,4 @@ class _AiInsight extends StatelessWidget {
         ]));
   }
 }
+```
