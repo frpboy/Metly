@@ -1,5 +1,8 @@
 import 'dart:math';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../config/app_config.dart';
 import '../models/price_model.dart';
 
 abstract class PriceProvider {
@@ -38,16 +41,42 @@ class MockPriceProvider implements PriceProvider {
 }
 
 class RealPriceProvider implements PriceProvider {
-  // ignore: unused_field
   final Dio _dio = Dio();
-  // TODO: Add API Key in Cfg or Settings
-  // ignore: unused_field
-  final String _apiKey = 'YOUR_API_KEY';
+  final SharedPreferences prefs;
+
+  RealPriceProvider(this.prefs);
+
+  String? get _workerUrl => prefs.getString(Cfg.prefsPriceWorkerUrl);
 
   @override
   Future<PriceSnapshot> latest(Metal metal) async {
-    // TODO: Implement real API call
-    // Example: final res = await _dio.get('https://api.metalpriceapi.com/v1/latest?api_key=$_apiKey&base=INR&currencies=${metal.id.toUpperCase()}');
-    throw UnimplementedError('Real API not integrated yet');
+    final url = _workerUrl;
+    if (url == null || url.isEmpty) {
+      // Fallback to mock if no URL configured
+      return MockPriceProvider().latest(metal);
+    }
+
+    try {
+      final res = await _dio.get(url);
+      final data = res.data;
+
+      if (data == null) throw Exception('No data');
+
+      final key = metal == Metal.gold ? 'gold' : 'silver';
+      final item = data[key];
+
+      if (item == null) throw Exception('Metal data not found');
+
+      return PriceSnapshot(
+        metal: metal,
+        price: (item['price'] as num).toDouble(),
+        recentHigh: (item['recentHigh'] as num).toDouble(),
+        updatedAt: DateTime.parse(item['updatedAt']),
+      );
+    } catch (e) {
+      debugPrint('Error fetching prices: $e');
+      // Fallback on error
+      return MockPriceProvider().latest(metal);
+    }
   }
 }

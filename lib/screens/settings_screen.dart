@@ -20,6 +20,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _modelCtrl;
   late final TextEditingController _proxyUrlCtrl;
   late final TextEditingController _proxyTokCtrl;
+  late final TextEditingController _priceWorkerUrlCtrl;
   bool _subActive = false;
   bool _lifeActive = false;
 
@@ -53,6 +54,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         text: widget.prefs.getString(Cfg.prefsProxyUrl) ?? '');
     _proxyTokCtrl = TextEditingController(
         text: widget.prefs.getString(Cfg.prefsProxyTok) ?? '');
+    _priceWorkerUrlCtrl = TextEditingController(
+        text: widget.prefs.getString(Cfg.prefsPriceWorkerUrl) ?? '');
     _subActive = widget.prefs.getBool(Cfg.entSubActive) ?? false;
     _lifeActive = widget.prefs.getBool(Cfg.entLifetime) ?? false;
   }
@@ -63,6 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _modelCtrl.dispose();
     _proxyUrlCtrl.dispose();
     _proxyTokCtrl.dispose();
+    _priceWorkerUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -72,6 +76,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await widget.prefs.setString(Cfg.prefsKeyModel, _modelCtrl.text.trim());
     await widget.prefs.setString(Cfg.prefsProxyUrl, _proxyUrlCtrl.text.trim());
     await widget.prefs.setString(Cfg.prefsProxyTok, _proxyTokCtrl.text.trim());
+    await widget.prefs
+        .setString(Cfg.prefsPriceWorkerUrl, _priceWorkerUrlCtrl.text.trim());
     await widget.prefs.setBool(Cfg.entSubActive, _subActive);
     await widget.prefs.setBool(Cfg.entLifetime, _lifeActive);
     if (!mounted) return;
@@ -205,6 +211,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Lifetime unlock • ${Cfg.priceLifetime}'),
             subtitle: const Text('Enables “Use My API” mode'),
             onChanged: (v) => setState(() => _lifeActive = v)),
+        const SizedBox(height: 16),
+        const Divider(color: Colors.white12),
+        const SizedBox(height: 12),
+        Text('Data Source',
+            style: GoogleFonts.poppins(
+                fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _priceWorkerUrlCtrl,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+              labelText: 'Price Worker URL',
+              labelStyle: TextStyle(color: Colors.white70),
+              enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24)),
+              focusedBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: Cfg.gold))),
+        ),
         const SizedBox(height: 16),
         FilledButton.icon(
             style: FilledButton.styleFrom(

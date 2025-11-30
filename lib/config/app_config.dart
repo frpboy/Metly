@@ -23,6 +23,7 @@ class Cfg {
   // NEW: proxy prefs (Metly AI)
   static const String prefsProxyUrl = 'proxy_url';
   static const String prefsProxyTok = 'proxy_token';
+  static const String prefsPriceWorkerUrl = 'price_worker_url';
 
   // Entitlements (dev stubs for pricing)
   // ₹99/mo for Metly AI (creator’s API)
