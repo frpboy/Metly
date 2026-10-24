@@ -2,6 +2,11 @@
 
 Metly is a premium Flutter application designed to track Gold and Silver prices in real-time, providing intelligent "Buy" or "Wait" signals and AI-driven market insights.
 
+## Links
+
+- **Web demo (prototype; prices are mocked):** https://metly-gold.vercel.app/
+- **Source code:** https://github.com/frpboy/Metly
+
 ## ✨ Features
 
 -   **Real-time Price Tracking**: Monitor live Gold and Silver prices (currently mocked).
