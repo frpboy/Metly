@@ -1,4 +1,3 @@
-```dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 import '../services/price_service.dart';
 import '../services/ai_service.dart';
-import '../models/price_snapshot.dart';
+import '../models/price_model.dart';
 import '../models/watchlist_item.dart';
 import '../models/portfolio_item.dart';
 import '../services/firestore_service.dart';
@@ -188,4 +187,3 @@ class _AiInsight extends StatelessWidget {
         ]));
   }
 }
-```
