@@ -1,10 +1,25 @@
+// Constant-time string comparison preventing timing side-channel attacks on tokens
+function timingSafeEqual(a, b) {
+    if (typeof a !== "string" || typeof b !== "string") return false;
+    const enc = new TextEncoder();
+    const bufA = enc.encode(a), bufB = enc.encode(b);
+    if (bufA.byteLength !== bufB.byteLength) return false;
+    if (typeof crypto !== "undefined" && typeof crypto.timingSafeEqual === "function") {
+        return crypto.timingSafeEqual(bufA, bufB);
+    }
+    let mismatch = 0;
+    for (let i = 0; i < bufA.byteLength; i++) mismatch |= bufA[i] ^ bufB[i];
+    return mismatch === 0;
+}
+
 export default {
     async fetch(req, env, ctx) {
-        // CORS
+        // CORS and security headers
         const cors = {
             "access-control-allow-origin": env.CORS_ALLOW_ORIGIN || "*",
             "access-control-allow-headers": "authorization,content-type",
             "access-control-allow-methods": "GET,POST,OPTIONS",
+            "x-content-type-options": "nosniff",
         };
         if (req.method === "OPTIONS") {
             return new Response(null, { headers: cors });
@@ -19,7 +34,7 @@ export default {
             });
         }
 
-        // auth: require proxy token header
+        // auth: require proxy token header using timing-safe comparison
         const incomingToken = req.headers.get("authorization") || "";
         const bearer = incomingToken.startsWith("Bearer ") ? incomingToken.slice(7) : incomingToken;
         if (!env.METLY_PROXY_TOKEN) {
@@ -28,7 +43,7 @@ export default {
                 headers: { "content-type": "application/json", ...cors },
             });
         }
-        if (bearer !== env.METLY_PROXY_TOKEN) {
+        if (!timingSafeEqual(bearer, env.METLY_PROXY_TOKEN)) {
             return new Response(JSON.stringify({ error: "Unauthorized" }), {
                 status: 401,
                 headers: { "content-type": "application/json", ...cors },
