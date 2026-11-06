@@ -22,7 +22,11 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Thank you! Feedback submitted.'),
+        content: Row(children: [
+          Icon(Icons.check_circle_outline, color: Cfg.gold),
+          SizedBox(width: 10),
+          Text('Thank you! Feedback submitted.'),
+        ]),
         behavior: SnackBarBehavior.floating));
     _message.clear();
   }
@@ -44,10 +48,16 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                         child: Column(children: [
                           TextFormField(
                             controller: _email,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
                               labelText: 'Email (optional)',
                               labelStyle: TextStyle(color: Colors.white70),
+                              hintText: 'name@example.com',
+                              hintStyle: TextStyle(color: Colors.white38),
+                              prefixIcon: Icon(Icons.email_outlined,
+                                  color: Colors.white54),
                               enabledBorder: OutlineInputBorder(
                                   borderSide:
                                       BorderSide(color: Colors.white24)),
@@ -67,6 +77,14 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Your message',
                               labelStyle: TextStyle(color: Colors.white70),
+                              hintText: 'Share ideas, issues, or suggestions…',
+                              hintStyle: TextStyle(color: Colors.white38),
+                              alignLabelWithHint: true,
+                              prefixIcon: Padding(
+                                padding: EdgeInsets.only(bottom: 64),
+                                child: Icon(Icons.chat_bubble_outline,
+                                    color: Colors.white54),
+                              ),
                               enabledBorder: OutlineInputBorder(
                                   borderSide:
                                       BorderSide(color: Colors.white24)),

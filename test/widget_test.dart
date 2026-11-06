@@ -1,32 +1,45 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:metly/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+  testWidgets('App loads and displays Home screen', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    // Build our app and trigger a frame.
     await tester.pumpWidget(MetlyApp(prefs: prefs));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.text('Welcome to Metly'), findsOneWidget);
+    expect(find.text('Enter Dashboard'), findsOneWidget);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  testWidgets('Feedback screen shows hints and submits feedback', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(MetlyApp(prefs: prefs));
+    await tester.pumpAndSettle();
+
+    // Open drawer and navigate to feedback
+    final menuButton = find.byTooltip('Menu');
+    expect(menuButton, findsOneWidget);
+    await tester.tap(menuButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Feedback'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Feedback'), findsWidgets);
+    expect(find.text('name@example.com'), findsOneWidget);
+    expect(find.text('Share ideas, issues, or suggestions…'), findsOneWidget);
+
+    // Enter message and submit
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Your message'), 'Great app!');
+    await tester.tap(find.text('Submit'));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Thank you! Feedback submitted.'), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
   });
 }
