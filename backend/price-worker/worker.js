@@ -1,14 +1,27 @@
 export default {
     async fetch(req, env, ctx) {
-        // CORS
+        // CORS and defensive security headers
         const cors = {
-            "access-control-allow-origin": "*",
+            "access-control-allow-origin": (env && env.CORS_ALLOW_ORIGIN) || "*",
             "access-control-allow-headers": "content-type",
             "access-control-allow-methods": "GET,OPTIONS",
+            "x-content-type-options": "nosniff",
         };
 
         if (req.method === "OPTIONS") {
             return new Response(null, { headers: cors });
+        }
+
+        // Restrict HTTP methods to prevent unexpected behavior and enforce read-only semantics
+        if (req.method !== "GET") {
+            return new Response(JSON.stringify({ error: "Method not allowed" }), {
+                status: 405,
+                headers: {
+                    "content-type": "application/json",
+                    "allow": "GET, OPTIONS",
+                    ...cors,
+                },
+            });
         }
 
         // Simulate fetching real data (replace this with real API calls later)
