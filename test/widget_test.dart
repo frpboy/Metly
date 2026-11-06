@@ -33,9 +33,21 @@ void main() {
     expect(find.text('name@example.com'), findsOneWidget);
     expect(find.text('Share ideas, issues, or suggestions…'), findsOneWidget);
 
+    // Enter message and verify clear button works
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Your message'), 'Typo message');
+    await tester.pumpAndSettle();
+
+    final clearBtn = find.byTooltip('Clear message');
+    expect(clearBtn, findsOneWidget);
+    await tester.tap(clearBtn);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Clear message'), findsNothing);
+
     // Enter message and submit
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Your message'), 'Great app!');
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Submit'));
     await tester.pump();
 
