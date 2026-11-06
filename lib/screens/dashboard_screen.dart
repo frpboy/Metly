@@ -37,11 +37,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _refresh() async {
     setState(() => loading = true);
-    final g = await provider.latest(Metal.gold);
-    final s = await provider.latest(Metal.silver);
+    // Performance optimization: Fetch gold and silver prices concurrently via Future.wait
+    // rather than sequentially awaiting them. This reduces total price loading latency
+    // by ~50% (from T_gold + T_silver down to max(T_gold, T_silver)).
+    final results = await Future.wait([
+      provider.latest(Metal.gold),
+      provider.latest(Metal.silver),
+    ]);
+    if (!mounted) return;
     setState(() {
-      gold = g;
-      silver = s;
+      gold = results[0];
+      silver = results[1];
       loading = false;
       aiText = null;
     });
