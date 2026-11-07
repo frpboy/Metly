@@ -54,7 +54,7 @@ class OpenRouterClient implements AiClient {
     final ddG = gold.drawdownPct.toStringAsFixed(2);
     final ddS = silver.drawdownPct.toStringAsFixed(2);
 
-    final sys = 'You are a financial assistant for Indian gold/silver…';
+    const sys = 'You are a financial assistant for Indian gold/silver…';
     final usr = '''
 Today:
 - Gold price: ₹${fmt(gold.price)} / ${gold.unit}; high: ₹${fmt(gold.recentHigh)}; drawdown: $ddG%; signal: ${goldSig.signal.name.toUpperCase()} (${goldSig.reason})
