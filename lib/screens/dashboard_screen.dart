@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -158,16 +159,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 16),
           const PlatformLinksRow(),
           const SizedBox(height: 16),
-          if (aiText != null) _AiInsight(text: aiText!),
+          if (aiText != null) AiInsightView(text: aiText!),
         ]),
       ),
     );
   }
 }
 
-class _AiInsight extends StatelessWidget {
+class AiInsightView extends StatelessWidget {
   final String text;
-  const _AiInsight({required this.text});
+  const AiInsightView({super.key, required this.text});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -177,9 +178,32 @@ class _AiInsight extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.white24)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('AI Insight',
-              style: GoogleFonts.poppins(
-                  color: Cfg.gold, fontSize: 16, fontWeight: FontWeight.w700)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('AI Insight',
+                  style: GoogleFonts.poppins(
+                      color: Cfg.gold, fontSize: 16, fontWeight: FontWeight.w700)),
+              IconButton(
+                icon: const Icon(Icons.copy, size: 18, color: Colors.white70),
+                tooltip: 'Copy AI insight to clipboard',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: text));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Row(children: [
+                      Icon(Icons.check_circle_outline, color: Cfg.gold, size: 18),
+                      SizedBox(width: 8),
+                      Text('AI insight copied to clipboard'),
+                    ]),
+                    behavior: SnackBarBehavior.floating,
+                    duration: Duration(seconds: 2),
+                  ));
+                },
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           SelectableText(text,
               style: GoogleFonts.poppins(

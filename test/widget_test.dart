@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:metly/main.dart';
+import 'package:metly/screens/dashboard_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -40,6 +41,32 @@ void main() {
     await tester.pump();
 
     expect(find.text('Thank you! Feedback submitted.'), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+  });
+
+  testWidgets('AiInsightView renders copy button with tooltip and shows snackbar on tap',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AiInsightView(text: 'Gold prices are expected to rise.'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('AI Insight'), findsOneWidget);
+    expect(find.text('Gold prices are expected to rise.'), findsOneWidget);
+
+    // Verify copy button tooltip
+    final copyButton = find.byTooltip('Copy AI insight to clipboard');
+    expect(copyButton, findsOneWidget);
+
+    await tester.tap(copyButton);
+    await tester.pump();
+
+    // Verify confirmation SnackBar
+    expect(find.text('AI insight copied to clipboard'), findsOneWidget);
     expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
   });
 }
