@@ -197,6 +197,65 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets(
+      'narrow viewport keeps session correct when savings scrolls offscreen',
+      (tester) async {
+    final auth = FakeAuth(null);
+    await pumpApp(tester, auth: auth, firestore: RecordingFirestore());
+    tester.view.physicalSize = const Size(430, 932);
+    await tester.pumpAndSettle();
+    auth.emit(const MetlyUser(uid: 'mobile-a', email: 'mobile-a@example.com'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+        find.byTooltip('Add watchlist target'), 300);
+    expect(find.byTooltip('Add watchlist target'), findsOneWidget);
+    // Move savings out of the lazy viewport, change session, and return.
+    await tester.drag(find.byType(ListView).first, const Offset(0, 1500));
+    await tester.pumpAndSettle();
+    auth.emit(null);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+        find.text('Save your watchlist & portfolio'), 300);
+    expect(find.byTooltip('Add watchlist target'), findsNothing);
+    expect(find.text('Save your watchlist & portfolio'), findsOneWidget);
+    auth.emit(const MetlyUser(uid: 'mobile-b', email: 'mobile-b@example.com'));
+    await tester.pumpAndSettle();
+    expect(find.text('Save your watchlist & portfolio'), findsNothing);
+    await tester.scrollUntilVisible(
+        find.byTooltip('Add watchlist target'), 300);
+    expect(find.byTooltip('Add watchlist target'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('already-emitted signed-out broadcast does not leave a spinner',
+      (tester) async {
+    final auth = _BroadcastAuth();
+    auth.events
+        .add(null); // No listener yet, just like a previous drawer visit.
+    await pumpApp(tester, auth: auth, firestore: RecordingFirestore());
+    expect(find.text('Save your watchlist & portfolio'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await auth.events.close();
+  });
+
+  testWidgets('auth stream error is handled and does not masquerade as signout',
+      (tester) async {
+    final auth = _BroadcastAuth();
+    await pumpApp(tester, auth: auth, firestore: RecordingFirestore());
+    auth.events.addError(StateError('test auth transport failure'));
+    await tester.pumpAndSettle();
+    expect(
+        find.text('Account status unavailable. Please retry.'), findsOneWidget);
+    expect(find.text('Save your watchlist & portfolio'), findsNothing);
+    expect(tester.takeException(), isNull);
+    auth.events.add(null);
+    await tester.pumpAndSettle();
+    expect(find.text('Save your watchlist & portfolio'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await auth.events.close();
+  });
+
   testWidgets('watchlist add validates input then records the item',
       (tester) async {
     final fs = RecordingFirestore();
@@ -487,4 +546,11 @@ class _ResetSpyAuth implements AuthService {
   Future<void> resetPassword(String email) async => resets.add(email);
   @override
   Future<void> signOut() async {}
+}
+
+class _BroadcastAuth extends FakeAuth {
+  final events = StreamController<MetlyUser?>.broadcast();
+  _BroadcastAuth() : super(null);
+  @override
+  Stream<MetlyUser?> authChanges() => events.stream;
 }

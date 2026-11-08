@@ -28,8 +28,6 @@ class AuthException implements Exception {
 
 class FirebaseAuthService implements AuthService {
   final fb.FirebaseAuth _auth;
-  late final Stream<MetlyUser?> _changes =
-      _auth.authStateChanges().map(_wrap).asBroadcastStream();
   FirebaseAuthService([fb.FirebaseAuth? auth])
       : _auth = auth ?? fb.FirebaseAuth.instance;
 
@@ -37,7 +35,7 @@ class FirebaseAuthService implements AuthService {
       u == null ? null : MetlyUser(uid: u.uid, email: u.email);
 
   @override
-  Stream<MetlyUser?> authChanges() => _changes;
+  Stream<MetlyUser?> authChanges() => _auth.authStateChanges().map(_wrap);
 
   @override
   MetlyUser? get current => _wrap(_auth.currentUser);

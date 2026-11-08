@@ -46,7 +46,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       widget.providerOverride ?? RealPriceProvider(widget.prefs);
   late final AuthService _auth = widget.authOverride ?? metlyDefaultAuth();
   StreamSubscription<MetlyUser?>? _authSubscription;
-  bool _authReady = false;
+  bool _authError = false;
   int _refreshGen = 0;
   int _aiGen = 0;
   PriceSnapshot? gold;
@@ -61,14 +61,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _authReady = _auth.current != null;
     // Own this subscription for the route lifetime, not the lazy list child.
-    _authSubscription = _auth.authChanges().listen((user) {
-      if (!mounted) return;
-      setState(() {
-        _authReady = true;
-      });
-    });
+    _listenForAuth();
     // Time-passage revalidation: a displayed snapshot must not sit on screen
     // as live past its freshness window.
     _stalenessTimer =
@@ -199,15 +193,27 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
+  Future<void> _listenForAuth() async {
+    await _authSubscription?.cancel();
+    if (!mounted) return;
+    _authSubscription = _auth.authChanges().listen((_) {
+      if (mounted) setState(() => _authError = false);
+    }, onError: (Object error, StackTrace stack) {
+      if (mounted) setState(() => _authError = true);
+    });
+  }
+
   Widget _buildSavings() {
-    final user = _auth.current;
-    if (!_authReady && user == null) {
-      return const Center(
-          child: SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2.5)));
+    if (_authError) {
+      return Column(children: [
+        const Text('Account status unavailable. Please retry.'),
+        TextButton(
+            onPressed: _listenForAuth, child: const Text('Retry account')),
+      ]);
     }
+    // main() awaits the SDK's initial restored auth state before runApp.
+    // Stream events trigger rebuilds, but current is the canonical snapshot.
+    final user = _auth.current;
     if (user == null) return const _SignedOutSavingsCard();
     final firestore =
         widget.firestoreOverride ?? FirestoreService(uid: user.uid);
@@ -233,21 +239,19 @@ class _DashboardScreenState extends State<DashboardScreen>
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: ListView(padding: const EdgeInsets.all(16), children: [
-          Row(children: [
+          Wrap(spacing: 12, runSpacing: 8, children: [
             FilledButton.icon(
                 style: FilledButton.styleFrom(
                     backgroundColor: Cfg.gold, foregroundColor: Colors.black),
                 onPressed: loading ? null : _refresh,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Refresh Prices')),
-            const SizedBox(width: 12),
             FilterChip(
                 selected: sipEnabled,
                 onSelected: (v) => setState(() => sipEnabled = v),
                 label: const Text('SIP Tip'),
                 selectedColor: Cfg.gold.withValues(alpha: 0.25),
                 side: BorderSide(color: Cfg.gold.withValues(alpha: 0.35))),
-            const Spacer(),
             FilledButton.icon(
                 onPressed: (aiBusy || loading) ? null : _askAI,
                 style: FilledButton.styleFrom(
