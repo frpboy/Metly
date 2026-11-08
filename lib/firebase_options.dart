@@ -53,12 +53,11 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCvpd6M1IVhaqjy4tPN0XU0zTcqWJ42cZI',
-    appId: '1:35694651897:web:359facac21653569503528',
-    messagingSenderId: '35694651897',
-    projectId: 'metly-62916',
-    authDomain: 'metly-62916.firebaseapp.com',
-    storageBucket: 'metly-62916.firebasestorage.app',
-    measurementId: 'G-87XLKDFPMG',
+    apiKey: 'AIzaSyBdx0SmbQxdVMJ7ovtCf_DUh0wS3ULo88c',
+    appId: '1:55907645825:web:5a465412aa21fabe5ad080',
+    messagingSenderId: '55907645825',
+    projectId: 'metly-e1d84',
+    authDomain: 'metly-e1d84.firebaseapp.com',
+    storageBucket: 'metly-e1d84.firebasestorage.app',
   );
 }
