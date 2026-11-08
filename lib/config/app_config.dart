@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 ════════════════════════════════════════════════════════════════════════════ */
 class Cfg {
   static const Color gold = Color(0xFFFFD700);
-  static const String brandLine = 'Made in India with ❤ Gold';
+  static const String brandLine = 'Made in India with love Gold';
   static const String appTitle = 'Metly — $brandLine';
-  static const String version = 'v1.0.1';
+  static const String version = 'v1.0.0';
 
   // Festival dates for post-festive guard (example 2025)
   static final DateTime dhanteras2025 = DateTime(2025, 10, 18);

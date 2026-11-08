@@ -5,7 +5,6 @@ import '../config/app_config.dart';
 import '../widgets/common_widgets.dart';
 
 class AboutScreen extends StatelessWidget {
-  static const _brandLine = 'Made in India with love Gold';
   final Future<bool> Function(Uri)? openLinkOverride;
   const AboutScreen({super.key, this.openLinkOverride});
 
@@ -65,7 +64,7 @@ class AboutScreen extends StatelessWidget {
     return Scaffold(
       drawer: const MetlyDrawer(),
       appBar: const MetlyAppBar(
-          titleTop: 'About Metly', titleBottom: _brandLine),
+          titleTop: 'About Metly', titleBottom: Cfg.brandLine),
       backgroundColor: const Color(0xFF0E0E0E),
       body: ListView(padding: const EdgeInsets.all(24), children: [
         Row(children: [
@@ -80,7 +79,7 @@ class AboutScreen extends StatelessWidget {
                         color: Cfg.gold,
                         fontSize: 22,
                         fontWeight: FontWeight.w700)),
-                const Text(_brandLine,
+                const Text(Cfg.brandLine,
                     style: TextStyle(color: Colors.white70)),
                 const Text('Version ${Cfg.version}',
                     style: TextStyle(color: Colors.white54)),
