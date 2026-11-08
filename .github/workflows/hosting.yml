@@ -1,11 +1,11 @@
-name: Deploy Flutter Web to Firebase Hosting
+name: Verify Flutter Web (production deploys on Vercel)
 
 on:
   push:
     branches: [ "main" ]
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,11 +24,3 @@ jobs:
 
       - name: Build Flutter Web
         run: flutter build web --release --web-renderer canvaskit
-
-      - name: Install Firebase CLI
-        run: npm i -g firebase-tools
-
-      - name: Deploy to Firebase Hosting
-        run: firebase deploy --only hosting --project metly-62916
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

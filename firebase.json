@@ -1,1 +1,17 @@
-{"firestore":{"rules":"firestore.rules"},"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"rewrites":[{"source":"**","destination":"/index.html"}]},"flutter":{"platforms":{"dart":{"lib/firebase_options.dart":{"projectId":"metly-62916","configurations":{"web":"1:35694651897:web:359facac21653569503528"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "metly-e1d84",
+          "configurations": {
+            "web": "1:55907645825:web:5a465412aa21fabe5ad080"
+          }
+        }
+      }
+    }
+  }
+}

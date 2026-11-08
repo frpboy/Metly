@@ -44,13 +44,12 @@ Each step includes **what to do**, **where**, **when**, and **why**. Follow the 
 | | The app will now use the proxy for AI calls and fetch live (simulated) metal prices from the price worker. |
 
 ---
-### 4️⃣ Set Up Firebase Firestore (Watchlist & Portfolio)
-| When | Where | Why |
-|------|-------|-----|
-| **Before deploying the web app** (or immediately after step 3) | Firebase Console → your project (`metly‑62916`). | Stores user‑specific watchlist and portfolio data. |
-| | Enable **Firestore** → **Create database** → choose **Start in test mode**. | Allows reads/writes without authentication for now (development). |
-| | (Optional) Later replace test‑mode rules with the secure rules you will write in `firestore.rules`. |
-| | The code in `lib/services/firestore_service.dart` reads/writes under `users/<test-user-id>/watchlist` and `users/<test-user-id>/portfolio`. | Hard‑coded `test-user-id` is used until you add Firebase Auth. |
+### 4️⃣ Firebase accounts and saved data
+- Active project: `metly-e1d84`, Spark (free). The inaccessible legacy project is not used or modified.
+- Email/Password authentication is required. Authorised production domain: `metly-gold.vercel.app`.
+- Create the default Firestore database in production mode, then publish the reviewed `firestore.rules` before deploying the app. Never enable public test-mode rules.
+- Data belongs under `users/<authenticated-uid>/watchlist` and `users/<authenticated-uid>/portfolio`. Do not assign shared legacy data to any account.
+- `firebase.json` and `.firebaserc` target the new database. Production web hosting remains Vercel; the GitHub workflow only verifies the Flutter web build. No Firebase Hosting deployment or legacy `FIREBASE_TOKEN` is required.
 
 ---
 ### 5️⃣ Deploy the Updated Flutter Web App to Vercel
