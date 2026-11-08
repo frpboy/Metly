@@ -68,7 +68,11 @@ class AboutScreen extends StatelessWidget {
       backgroundColor: const Color(0xFF0E0E0E),
       body: ListView(padding: const EdgeInsets.all(24), children: [
         Row(children: [
-          Image.asset('assets/logo/icon.png', width: 64),
+          Image.asset(
+            'assets/logo/icon.png',
+            width: 64,
+            semanticLabel: 'Metly logo',
+          ),
           const SizedBox(width: 16),
           Expanded(
               child: Column(

@@ -19,7 +19,11 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Image.asset('assets/logo/icon.png', width: 120),
+                    Image.asset(
+                      'assets/logo/icon.png',
+                      width: 120,
+                      semanticLabel: 'Metly logo',
+                    ),
                     const SizedBox(height: 24),
                     Text('Welcome to Metly',
                         style: GoogleFonts.poppins(

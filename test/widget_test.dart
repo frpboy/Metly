@@ -4,7 +4,8 @@ import 'package:metly/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('App loads and displays Home screen', (WidgetTester tester) async {
+  testWidgets('App loads and displays Home screen',
+      (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(MetlyApp(prefs: prefs));
@@ -12,9 +13,11 @@ void main() {
 
     expect(find.text('Welcome to Metly'), findsOneWidget);
     expect(find.text('Enter Dashboard'), findsOneWidget);
+    expect(find.bySemanticsLabel('Metly logo'), findsOneWidget);
   });
 
-  testWidgets('Feedback screen shows hints and submits feedback', (WidgetTester tester) async {
+  testWidgets('Feedback screen shows hints and submits feedback',
+      (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(MetlyApp(prefs: prefs));
