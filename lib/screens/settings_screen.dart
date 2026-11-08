@@ -93,6 +93,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           titleTop: 'Settings', titleBottom: 'AI & Proxy', showMenu: false),
       backgroundColor: const Color(0xFF0E0E0E),
       body: ListView(padding: const EdgeInsets.all(24), children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.info_outline, color: Cfg.gold),
+          title: const Text('About Metly'),
+          subtitle: const Text('Developer, support, sponsors and credits'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.pushNamed(context, '/about'),
+        ),
+        const Divider(color: Colors.white12),
+        const SizedBox(height: 16),
         Text('AI Mode',
             style: GoogleFonts.poppins(
                 fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w700)),
