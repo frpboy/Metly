@@ -1,11 +1,11 @@
 {
-    "name": "metly",
-    "short_name": "metly",
+    "name": "Metly",
+    "short_name": "Metly",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#111111",
+    "theme_color": "#111111",
+    "description": "Clear, actionable signals for gold, silver and other precious metals. Built for India.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
