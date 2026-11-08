@@ -9,6 +9,7 @@ import '../services/ai_service.dart';
 import '../models/price_model.dart';
 import '../models/watchlist_item.dart';
 import '../models/portfolio_item.dart';
+import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/common_widgets.dart';
 import '../widgets/signal_card.dart';
@@ -20,6 +21,7 @@ class DashboardScreen extends StatefulWidget {
   final PriceProvider? providerOverride;
   final FirestoreService? firestoreOverride;
   final AiClient? aiOverride;
+  final AuthService? authOverride;
 
   /// Clock seam for aging tests.
   final DateTime Function()? clockOverride;
@@ -29,6 +31,7 @@ class DashboardScreen extends StatefulWidget {
       this.providerOverride,
       this.firestoreOverride,
       this.aiOverride,
+      this.authOverride,
       this.clockOverride});
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -41,8 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   late final DateTime Function() _clock = widget.clockOverride ?? DateTime.now;
   late final PriceProvider provider =
       widget.providerOverride ?? RealPriceProvider(widget.prefs);
-  late final FirestoreService _firestore =
-      widget.firestoreOverride ?? FirestoreService();
+  late final AuthService _auth = widget.authOverride ?? metlyDefaultAuth();
   int _refreshGen = 0;
   int _aiGen = 0;
   PriceSnapshot? gold;
@@ -239,70 +241,29 @@ class _DashboardScreenState extends State<DashboardScreen>
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white70, fontSize: 13)),
           const SizedBox(height: 16),
-          // Watchlist Section
-          const Text('Watchlist', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Cfg.gold)),
-          const SizedBox(height: 8),
-          StreamBuilder<List<WatchlistItem>>(
-            stream: _firestore.watchlistStream(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return const Text('Watchlist unavailable',
-                    style: TextStyle(color: Colors.redAccent, fontSize: 13));
-              }
-              if (!snapshot.hasData) {
+          // Watchlist & Portfolio, scoped to the signed-in account.
+          StreamBuilder<MetlyUser?>(
+            stream: _auth.authChanges(),
+            builder: (context, authSnap) {
+              if (authSnap.connectionState == ConnectionState.waiting &&
+                  !authSnap.hasData) {
                 return const Center(
                     child: SizedBox(
                         width: 24,
                         height: 24,
                         child: CircularProgressIndicator(strokeWidth: 2.5)));
               }
-              final items = snapshot.data!;
-              if (items.isEmpty) return const Text('No watchlist items', style: TextStyle(color: Colors.white70));
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                itemBuilder: (c, i) {
-                  final it = items[i];
-                  return ListTile(
-                    title: Text('${it.metal.toUpperCase()} @ ₹${it.targetPrice.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
-                    subtitle: Text('Added: ${it.addedAt.toLocal().toString().split('.').first}', style: const TextStyle(color: Colors.white54)),
-                  );
-                },
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-          // Portfolio Section
-          const Text('Portfolio', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Cfg.gold)),
-          const SizedBox(height: 8),
-          StreamBuilder<List<PortfolioItem>>(
-            stream: _firestore.portfolioStream(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return const Text('Portfolio unavailable',
-                    style: TextStyle(color: Colors.redAccent, fontSize: 13));
-              }
-              if (!snapshot.hasData) {
-                return const Center(
-                    child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2.5)));
-              }
-              final items = snapshot.data!;
-              if (items.isEmpty) return const Text('No portfolio items', style: TextStyle(color: Colors.white70));
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                itemBuilder: (c, i) {
-                  final it = items[i];
-                  return ListTile(
-                    title: Text('${it.metal.toUpperCase()} holdings: ${it.amount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white)),
-                    subtitle: Text('Avg price: ₹${it.avgPrice.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white54)),
-                  );
-                },
+              final user = authSnap.data;
+              if (user == null) return const _SignedOutSavingsCard();
+              final firestore =
+                  widget.firestoreOverride ?? FirestoreService(uid: user.uid);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _WatchlistSection(firestore: firestore),
+                  const SizedBox(height: 24),
+                  _PortfolioSection(firestore: firestore),
+                ],
               );
             },
           ),
@@ -336,5 +297,362 @@ class _AiInsight extends StatelessWidget {
               style: GoogleFonts.poppins(
                   color: Colors.white.withValues(alpha: 0.92))),
         ]));
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ACCOUNT-GATED WATCHLIST & PORTFOLIO
+══════════════════════════════════════════════════════════════════════════ */
+
+class _SignedOutSavingsCard extends StatelessWidget {
+  const _SignedOutSavingsCard();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+          color: const Color(0xFF141414),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white24)),
+      child: Column(children: [
+        const Icon(Icons.bookmark_add_outlined, color: Cfg.gold, size: 30),
+        const SizedBox(height: 8),
+        Text('Save your watchlist & portfolio',
+            style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text('Create a free account and your metals, targets and holdings '
+            'stay saved to you on every device.',
+            textAlign: TextAlign.center,
+            style:
+                GoogleFonts.poppins(color: Colors.white70, fontSize: 12.5)),
+        const SizedBox(height: 12),
+        FilledButton(
+          style: FilledButton.styleFrom(
+              backgroundColor: Cfg.gold, foregroundColor: Colors.black),
+          onPressed: () => Navigator.pushNamed(context, '/auth'),
+          child: const Text('Sign in / Create account',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+        ),
+      ]),
+    );
+  }
+}
+
+class _WatchlistSection extends StatelessWidget {
+  final FirestoreService firestore;
+  const _WatchlistSection({required this.firestore});
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Text('Watchlist',
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w700, color: Cfg.gold)),
+        const Spacer(),
+        IconButton(
+          tooltip: 'Add watchlist target',
+          icon: const Icon(Icons.add_circle_outline, color: Cfg.gold),
+          onPressed: () => _showAddWatchlist(context, firestore),
+        ),
+      ]),
+      const SizedBox(height: 4),
+      StreamBuilder<List<WatchlistItem>>(
+        stream: firestore.watchlistStream(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Text('Watchlist unavailable',
+                style: TextStyle(color: Colors.redAccent, fontSize: 13));
+          }
+          if (!snapshot.hasData) {
+            return const Center(
+                child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5)));
+          }
+          final items = snapshot.data!;
+          if (items.isEmpty) {
+            return const Text('No watchlist items yet. Tap + to add one.',
+                style: TextStyle(color: Colors.white70));
+          }
+          return ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            itemBuilder: (c, i) {
+              final it = items[i];
+              return ListTile(
+                title: Text(
+                    '${it.metal.toUpperCase()} @ ₹${it.targetPrice.toStringAsFixed(2)}',
+                    style: const TextStyle(color: Colors.white)),
+                subtitle: Text(
+                    'Added: ${it.addedAt.toLocal().toString().split('.').first}',
+                    style: const TextStyle(color: Colors.white54)),
+                trailing: IconButton(
+                  tooltip: 'Remove from watchlist',
+                  icon: const Icon(Icons.delete_outline, color: Colors.white54),
+                  onPressed: () async {
+                    try {
+                      await firestore.removeWatchlistItem(it.id);
+                    } catch (_) {
+                      if (context.mounted) _showSaveError(context);
+                    }
+                  },
+                ),
+              );
+            },
+          );
+        },
+      ),
+    ]);
+  }
+}
+
+class _PortfolioSection extends StatelessWidget {
+  final FirestoreService firestore;
+  const _PortfolioSection({required this.firestore});
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Text('Portfolio',
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w700, color: Cfg.gold)),
+        const Spacer(),
+        IconButton(
+          tooltip: 'Add portfolio holding',
+          icon: const Icon(Icons.add_circle_outline, color: Cfg.gold),
+          onPressed: () => _showAddPortfolio(context, firestore),
+        ),
+      ]),
+      const SizedBox(height: 4),
+      StreamBuilder<List<PortfolioItem>>(
+        stream: firestore.portfolioStream(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Text('Portfolio unavailable',
+                style: TextStyle(color: Colors.redAccent, fontSize: 13));
+          }
+          if (!snapshot.hasData) {
+            return const Center(
+                child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5)));
+          }
+          final items = snapshot.data!;
+          if (items.isEmpty) {
+            return const Text('No holdings yet. Tap + to add one.',
+                style: TextStyle(color: Colors.white70));
+          }
+          return ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            itemBuilder: (c, i) {
+              final it = items[i];
+              return ListTile(
+                title: Text(
+                    '${it.metal.toUpperCase()} holdings: ${it.amount.toStringAsFixed(2)}',
+                    style: const TextStyle(color: Colors.white)),
+                subtitle: Text(
+                    'Avg price: ₹${it.avgPrice.toStringAsFixed(2)}',
+                    style: const TextStyle(color: Colors.white54)),
+                trailing: IconButton(
+                  tooltip: 'Remove holding',
+                  icon: const Icon(Icons.delete_outline, color: Colors.white54),
+                  onPressed: () async {
+                    try {
+                      await firestore.removePortfolioItem(it.id);
+                    } catch (_) {
+                      if (context.mounted) _showSaveError(context);
+                    }
+                  },
+                ),
+              );
+            },
+          );
+        },
+      ),
+    ]);
+  }
+}
+
+void _showSaveError(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('Could not save right now. Please try again.')));
+}
+
+String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
+
+Widget _metalDropdown(String value, ValueChanged<String> onChanged) {
+  return DropdownButtonFormField<String>(
+    initialValue: value,
+    dropdownColor: const Color(0xFF1C1C1C),
+    style: const TextStyle(color: Colors.white),
+    decoration: InputDecoration(
+      labelText: 'Metal',
+      labelStyle: const TextStyle(color: Colors.white70),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.white24)),
+    ),
+    items: const [
+      DropdownMenuItem(value: 'gold', child: Text('Gold')),
+      DropdownMenuItem(value: 'silver', child: Text('Silver')),
+    ],
+    onChanged: (v) => onChanged(v ?? 'gold'),
+  );
+}
+
+InputDecoration _numDeco(String label) => InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Colors.white70),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.white24)),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Cfg.gold)),
+    );
+
+Future<void> _showAddWatchlist(
+    BuildContext context, FirestoreService firestore) async {
+  final priceCtrl = TextEditingController();
+  String metal = 'gold';
+  String? error;
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (dialogCtx) => StatefulBuilder(
+      builder: (dialogCtx, setDlg) => AlertDialog(
+        backgroundColor: const Color(0xFF141414),
+        title: const Text('Add watchlist target',
+            style: TextStyle(color: Cfg.gold)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          _metalDropdown(metal, (v) => setDlg(() => metal = v)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: priceCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: Colors.white),
+            decoration: _numDeco('Target price (₹)'),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 8),
+            Text(error!,
+                style:
+                    const TextStyle(color: Colors.redAccent, fontSize: 12.5)),
+          ],
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child:
+                  const Text('Cancel', style: TextStyle(color: Colors.white70))),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Cfg.gold, foregroundColor: Colors.black),
+            onPressed: () {
+              final price = double.tryParse(priceCtrl.text.trim());
+              if (price == null || price <= 0) {
+                setDlg(() => error = 'Enter a target price above zero.');
+                return;
+              }
+              Navigator.pop(dialogCtx, true);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (saved != true) return;
+  final price = double.parse(priceCtrl.text.trim());
+  try {
+    await firestore.addWatchlistItem(WatchlistItem(
+        id: _newId(), metal: metal, targetPrice: price, addedAt: DateTime.now()));
+  } catch (_) {
+    if (context.mounted) _showSaveError(context);
+  }
+}
+
+Future<void> _showAddPortfolio(
+    BuildContext context, FirestoreService firestore) async {
+  final amountCtrl = TextEditingController();
+  final avgCtrl = TextEditingController();
+  String metal = 'gold';
+  String? error;
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (dialogCtx) => StatefulBuilder(
+      builder: (dialogCtx, setDlg) => AlertDialog(
+        backgroundColor: const Color(0xFF141414),
+        title:
+            const Text('Add holding', style: TextStyle(color: Cfg.gold)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          _metalDropdown(metal, (v) => setDlg(() => metal = v)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: amountCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: Colors.white),
+            decoration: _numDeco('Quantity'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: avgCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: Colors.white),
+            decoration: _numDeco('Average buy price (₹ per unit)'),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 8),
+            Text(error!,
+                style:
+                    const TextStyle(color: Colors.redAccent, fontSize: 12.5)),
+          ],
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child:
+                  const Text('Cancel', style: TextStyle(color: Colors.white70))),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Cfg.gold, foregroundColor: Colors.black),
+            onPressed: () {
+              final amount = double.tryParse(amountCtrl.text.trim());
+              final avg = double.tryParse(avgCtrl.text.trim());
+              if (amount == null || amount <= 0) {
+                setDlg(() => error = 'Enter a quantity above zero.');
+                return;
+              }
+              if (avg == null || avg <= 0) {
+                setDlg(() => error = 'Enter an average price above zero.');
+                return;
+              }
+              Navigator.pop(dialogCtx, true);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (saved != true) return;
+  final amount = double.parse(amountCtrl.text.trim());
+  final avg = double.parse(avgCtrl.text.trim());
+  try {
+    await firestore.addPortfolioItem(PortfolioItem(
+        id: _newId(),
+        metal: metal,
+        amount: amount,
+        avgPrice: avg,
+        addedAt: DateTime.now()));
+  } catch (_) {
+    if (context.mounted) _showSaveError(context);
   }
 }

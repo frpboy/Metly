@@ -8,6 +8,7 @@ import 'config/app_config.dart';
 import 'screens/home_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/about_screen.dart';
+import 'screens/auth_screen.dart';
 import 'screens/feedback_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/paywall_screen.dart';
@@ -38,6 +39,7 @@ class MetlyApp extends StatelessWidget {
       routes: {
         '/': (_) => HomeScreen(prefs: prefs),
         '/dashboard': (_) => DashboardScreen(prefs: prefs),
+        '/auth': (_) => const AuthScreen(),
         '/about': (_) => const AboutScreen(),
         '/feedback': (_) => const FeedbackScreen(),
         '/settings': (_) => SettingsScreen(prefs: prefs),

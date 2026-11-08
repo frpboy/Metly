@@ -7,9 +7,26 @@ import 'package:metly/models/price_model.dart';
 import 'package:metly/models/watchlist_item.dart';
 import 'package:metly/screens/dashboard_screen.dart';
 import 'package:metly/services/ai_service.dart';
+import 'package:metly/services/auth_service.dart';
 import 'package:metly/services/firestore_service.dart';
 import 'package:metly/services/price_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class FakeAuth implements AuthService {
+  final MetlyUser? user;
+  const FakeAuth(
+      [this.user = const MetlyUser(uid: 'test-uid', email: 't@example.com')]);
+  @override
+  Stream<MetlyUser?> authChanges() => Stream.value(user);
+  @override
+  MetlyUser? get current => user;
+  @override
+  Future<MetlyUser> signIn(String email, String password) async => user!;
+  @override
+  Future<MetlyUser> signUp(String email, String password) async => user!;
+  @override
+  Future<void> signOut() async {}
+}
 
 class FakeFirestore extends FirestoreService {
   @override
@@ -74,6 +91,7 @@ Future<void> pumpDashboard(
   WidgetTester tester, {
   required FakeProvider provider,
   AiClient? ai,
+  AuthService? auth,
   FirestoreService? firestore,
   DateTime Function()? clock,
 }) async {
@@ -85,6 +103,7 @@ Future<void> pumpDashboard(
     providerOverride: provider,
     firestoreOverride: firestore ?? FakeFirestore(),
     aiOverride: ai,
+    authOverride: auth ?? const FakeAuth(),
     clockOverride: clock,
   )));
 }

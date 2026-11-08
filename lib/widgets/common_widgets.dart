@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../config/app_config.dart';
+import '../services/auth_service.dart';
 
 /* ════════════════════════════════════════════════════════════════════════════
    NAV + HOME
@@ -48,7 +49,8 @@ class MetlyAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 class MetlyDrawer extends StatelessWidget {
-  const MetlyDrawer({super.key});
+  final AuthService? authOverride;
+  const MetlyDrawer({super.key, this.authOverride});
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -85,6 +87,7 @@ class MetlyDrawer extends StatelessWidget {
               Navigator.pop(context);
               Navigator.pushNamed(context, '/feedback');
             }),
+        _AccountTile(authOverride: authOverride),
         const Spacer(),
         Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -92,6 +95,46 @@ class MetlyDrawer extends StatelessWidget {
                 style:
                     GoogleFonts.poppins(color: Colors.white54, fontSize: 12))),
       ])),
+    );
+  }
+}
+
+class _AccountTile extends StatelessWidget {
+  final AuthService? authOverride;
+  const _AccountTile({this.authOverride});
+  @override
+  Widget build(BuildContext context) {
+    final auth = authOverride ?? metlyDefaultAuth();
+    return StreamBuilder<MetlyUser?>(
+      stream: auth.authChanges(),
+      builder: (context, snap) {
+        final user = snap.data;
+        if (user == null) {
+          return ListTile(
+              leading:
+                  const Icon(Icons.person_outline, color: Colors.white70),
+              title: const Text('Sign in / Create account'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/auth');
+              });
+        }
+        return ListTile(
+            leading: const Icon(Icons.person, color: Cfg.gold),
+            title: Text(user.email ?? 'Signed in',
+                overflow: TextOverflow.ellipsis),
+            subtitle: const Text('Signed in',
+                style:
+                    TextStyle(color: Colors.white54, fontSize: 12)),
+            trailing: TextButton(
+              child: const Text('Sign out',
+                  style: TextStyle(color: Colors.white70)),
+              onPressed: () async {
+                await auth.signOut();
+                if (context.mounted) Navigator.pop(context);
+              },
+            ));
+      },
     );
   }
 }
