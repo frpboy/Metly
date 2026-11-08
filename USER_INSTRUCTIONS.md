@@ -78,10 +78,7 @@ npx -y vercel@latest deploy --prod
 
 ---
 ### 7️⃣ Future Enhancements (Optional, not required now)
-- **Add Firebase Authentication** and replace the hard‑coded `test-user-id` with the authenticated UID.
 - **Swap the simulated price worker** for a real metal‑price API (e.g., MetalPriceAPI) – just modify `backend/price‑worker/worker.js` to call the external API and return the JSON shape.
-- **Harden Firestore security rules** (move out of test mode) – edit `firestore.rules` to restrict reads/writes to the authenticated user.
-- **Create UI for adding/removing watchlist items** and managing portfolio holdings.
 - **Implement push notifications** for “Buy” signals (e.g., using Firebase Cloud Messaging).
 
 ---

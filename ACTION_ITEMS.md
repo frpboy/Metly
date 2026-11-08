@@ -61,11 +61,8 @@ npx -y vercel@latest deploy --prod
 | **Save** | – | – | Persists the configuration in `SharedPreferences`. |
 
 ---
-### 5️⃣ Set up Firebase Firestore (Watchlist & Portfolio persistence)
-| When | Where | What | Why |
-|------|-------|------|-----|
-| **Now (or before first deployment)** | Firebase Console → your project (`metly‑62916`). | 1. Enable **Firestore** → *Create database* → choose **Start in test mode** (public read/write).<br>2. (Optional) Later replace the test‑mode rules with the secure rules you will write in `firestore.rules`. | Test mode lets the app write watchlist/portfolio data without authentication during development. |
-| **After enabling** | No further action needed for the current code because `FirestoreService` uses a hard‑coded `test-user-id`. | When you add real authentication, replace that ID with `FirebaseAuth.instance.currentUser!.uid`. |
+### 5️⃣ Firebase accounts and saved data
+The web app uses Email/Password authentication and per-user storage in `metly-e1d84` on the free Spark plan. Enable Email/Password, authorise `metly-gold.vercel.app`, create the default Firestore database in production mode and publish the reviewed `firestore.rules` before deploying the app. Never use public test-mode rules. Watchlists and portfolios belong under `users/<authenticated-uid>/...`; do not restore the old hard-coded shared user ID. Web hosting remains Vercel, not Firebase Hosting.
 
 ---
 ### 6️⃣ Resolve Android Gradle / JVM error
