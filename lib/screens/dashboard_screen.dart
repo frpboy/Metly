@@ -16,6 +16,7 @@ import '../widgets/signal_card.dart';
 
 class DashboardScreen extends StatefulWidget {
   final SharedPreferences prefs;
+  final bool initialAuthReady;
 
   /// Test/seam overrides; production uses the real implementations.
   final PriceProvider? providerOverride;
@@ -28,6 +29,7 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen(
       {super.key,
       required this.prefs,
+      this.initialAuthReady = true,
       this.providerOverride,
       this.firestoreOverride,
       this.aiOverride,
@@ -62,6 +64,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     // Own this subscription for the route lifetime, not the lazy list child.
+    _authError = !widget.initialAuthReady;
     _listenForAuth();
     // Time-passage revalidation: a displayed snapshot must not sit on screen
     // as live past its freshness window.
@@ -194,13 +197,15 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Future<void> _listenForAuth() async {
-    await _authSubscription?.cancel();
     if (!mounted) return;
+    final previous = _authSubscription;
+    // Attach before canceling the old listener so retry cannot drop an event.
     _authSubscription = _auth.authChanges().listen((_) {
       if (mounted) setState(() => _authError = false);
     }, onError: (Object error, StackTrace stack) {
       if (mounted) setState(() => _authError = true);
     });
+    await previous?.cancel();
   }
 
   Widget _buildSavings() {

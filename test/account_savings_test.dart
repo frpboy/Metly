@@ -94,7 +94,9 @@ class FakeProvider implements PriceProvider {
 }
 
 Future<void> pumpApp(WidgetTester tester,
-    {required AuthService auth, required FirestoreService firestore}) async {
+    {required AuthService auth,
+    required FirestoreService firestore,
+    bool initialAuthReady = true}) async {
   tester.view.physicalSize = const Size(800, 3600);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -104,6 +106,7 @@ Future<void> pumpApp(WidgetTester tester,
     routes: {'/auth': (_) => AuthScreen(authOverride: auth)},
     home: DashboardScreen(
       prefs: prefs,
+      initialAuthReady: initialAuthReady,
       providerOverride: FakeProvider(),
       firestoreOverride: firestore,
       authOverride: auth,
@@ -252,6 +255,26 @@ void main() {
     auth.events.add(null);
     await tester.pumpAndSettle();
     expect(find.text('Save your watchlist & portfolio'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await auth.events.close();
+  });
+
+  testWidgets('unresolved bootstrap shows status then recovers on late auth',
+      (tester) async {
+    final auth = _BroadcastAuth();
+    await pumpApp(tester,
+        auth: auth, firestore: RecordingFirestore(), initialAuthReady: false);
+    expect(
+        find.text('Account status unavailable. Please retry.'), findsOneWidget);
+    expect(find.text('Save your watchlist & portfolio'), findsNothing);
+    await tester.tap(find.text('Retry account'));
+    await tester.pumpAndSettle();
+    auth.user = const MetlyUser(uid: 'late', email: 'late@example.com');
+    auth.events.add(auth.user);
+    await tester.pumpAndSettle();
+    expect(
+        find.text('Account status unavailable. Please retry.'), findsNothing);
+    expect(find.text('Watchlist'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await auth.events.close();
   });
