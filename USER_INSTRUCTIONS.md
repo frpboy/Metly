@@ -88,7 +88,7 @@ npx -y vercel@latest deploy --prod
 | 1 | Deploy AI Proxy Worker | Cloudflare → Workers | `METLY_PROXY_TOKEN`, `OPENROUTER_API_KEY` |
 | 2 | Deploy Price Feed Worker | Cloudflare → Workers | (none required for simulated version) |
 | 3 | Set URLs in Metly Settings | Metly web app → Settings | Proxy URL, Proxy Token, Price Worker URL |
-| 4 | Enable Firestore (test mode) | Firebase Console → Firestore | – |
+| 4 | Enable authenticated Firestore (production rules) | Firebase Console → Firestore | – |
 | 5 | Deploy Flutter web | Local terminal → Vercel | `build/web` directory |
 | 6 | Verify | Browser (Vercel URL) | – |
 

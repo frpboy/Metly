@@ -99,7 +99,7 @@ flutter build apk --release   # or flutter run for a device
 | 5 | Deploy AI Proxy | Cloudflare → Workers | `backend/ai-proxy/worker.js` |
 | ~~6~~ | ~~Deploy Price Worker~~ REMOVED - simulator quarantined, app uses gold-api.com directly | - | ~~`backend/price-worker/worker.js`~~ |
 | 7 | Set app URLs | Metly Settings (web) | Proxy URL, Proxy Token, Price Worker URL |
-| 8 | Enable Firestore (test mode) | Firebase Console | – |
+| 8 | Enable authenticated Firestore (production rules) | Firebase Console | – |
 | 9 | Install Java 11 | Windows | Download JDK 11, set `JAVA_HOME` |
 |10 | Android build | project root | `flutter clean && flutter build apk --release` |
 
@@ -108,6 +108,6 @@ flutter build apk --release   # or flutter run for a device
 - All compile errors should disappear (`flutter build web` succeeds). 
 - The Vercel site is live and shows live prices and AI insights. 
 - Android builds without the Gradle/JVM error. 
-- Watchlist & Portfolio data persist in Firestore (test mode). 
+- Watchlist & Portfolio data persist privately in Firestore under each authenticated UID.
 
 If any step fails, re‑run the preceding step, double‑check the URLs/keys, and let me know the exact error message – I’ll help you troubleshoot further.
