@@ -24,6 +24,18 @@ class PriceSnapshot {
 
   /// Human-readable name of the data source, shown in the UI.
   final String source;
+
+  /// What a seller receives, in the display unit, when the source quotes a
+  /// sell side (OroPocket). Null for single-price sources.
+  final double? sellPrice;
+
+  /// GST amount per display unit, shown separately when the source breaks
+  /// it out. Never folded silently into [price].
+  final double? gstAmount;
+
+  /// Purity label from the source (e.g. '24K 99.9%'), null when unknown.
+  final String? purity;
+
   PriceSnapshot(
       {required this.metal,
       required this.price,
@@ -31,7 +43,10 @@ class PriceSnapshot {
       required this.updatedAt,
       this.highIsObserved = false,
       this.highObservedSince,
-      this.source = 'gold-api.com'});
+      this.source = 'gold-api.com',
+      this.sellPrice,
+      this.gstAmount,
+      this.purity});
   double get drawdownPct => ((recentHigh - price) / recentHigh * 100);
   String get unit => metal.unit;
 

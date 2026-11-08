@@ -44,13 +44,25 @@ class FakeClock {
   void advance(Duration d) => now = now.add(d);
 }
 
+/// OroPocket-shaped combined payload: INR per gram, buy/sell + 3% GST.
+/// Gold buy 10000/g -> 100000 per 10g; silver buy 100/g -> 100000 per kg.
 Map<String, dynamic> goldPayload(FakeClock clock,
-        {num? price = 311035, String? symbol = 'XAU', String? currency = 'INR'}) =>
+        {num? price = 10000, String? source = 'oropocket'}) =>
     {
-      if (symbol != null) 'symbol': symbol,
-      if (currency != null) 'currency': currency,
-      'price': price,
-      'updatedAt': clock.now.toUtc().toIso8601String(),
+      if (source != null) 'source': source,
+      'gold': {
+        'buyPerGram': price,
+        'sellPerGram': 9600,
+        'gstPerGram': 300,
+      },
+      'silver': {
+        'buyPerGram': 100,
+        'sellPerGram': 95,
+        'gstPerGram': 3,
+      },
+      'asOf': clock.now.toUtc().toIso8601String(),
+      'fetchedAt': clock.now.toUtc().toIso8601String(),
+      'stale': false,
     };
 
 Future<(RealPriceProvider, FakeAdapter, FakeClock)> makeProvider(
@@ -69,23 +81,24 @@ Future<(RealPriceProvider, FakeAdapter, FakeClock)> makeProvider(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('gold-api path', () {
+  group('oropocket path', () {
     test('happy path: converts, marks observed, attributes source', () async {
       final (provider, _, clock) = await makeProvider((_) async => jsonBody(goldPayload(FakeClock(DateTime.now()))));
       final snap = await provider.latest(Metal.gold);
       expect(snap.price, closeTo(100000, 1));
       expect(snap.highIsObserved, isTrue);
       expect(snap.highObservedSince, isNotNull);
-      expect(snap.source, 'gold-api.com');
+      expect(snap.source, 'OroPocket');
       expect(clock, isNotNull);
     });
 
-    test('missing or wrong symbol/currency rejected, nothing persisted', () async {
+    test('missing or wrong source/section/price rejected, nothing persisted', () async {
       for (final mutate in [
-        (Map<String, dynamic> b) => b..['symbol'] = 'XAG',
-        (Map<String, dynamic> b) => b..['currency'] = 'USD',
-        (Map<String, dynamic> b) => b..remove('symbol'),
-        (Map<String, dynamic> b) => b..remove('currency'),
+        (Map<String, dynamic> b) => b..['source'] = 'somewhere-else',
+        (Map<String, dynamic> b) => b..remove('source'),
+        (Map<String, dynamic> b) => b..remove('gold'),
+        (Map<String, dynamic> b) =>
+            (b['gold'] as Map).remove('buyPerGram'),
       ]) {
         SharedPreferences.setMockInitialValues({});
         final sp = await SharedPreferences.getInstance();
@@ -98,7 +111,7 @@ void main() {
         final provider = RealPriceProvider(sp,
             dio: Dio()..httpClientAdapter = adapter, clock: clock.call);
         await expectLater(provider.latest(Metal.gold), throwsException);
-        expect(sp.getDouble('gold-api_gold_observed_high'), isNull,
+        expect(sp.getDouble('oropocket_gold_observed_high'), isNull,
             reason: 'mutation must not persist');
       }
     });
@@ -108,12 +121,18 @@ void main() {
         SharedPreferences.setMockInitialValues({});
         final sp = await SharedPreferences.getInstance();
         final clock = FakeClock(DateTime.now());
-        final adapter = FakeAdapter(
-            (_) async => jsonBody({...goldPayload(clock), 'price': bad}));
+        final adapter = FakeAdapter((_) async => jsonBody({
+              ...goldPayload(clock),
+              'gold': {
+                'buyPerGram': bad,
+                'sellPerGram': 9600,
+                'gstPerGram': 300,
+              },
+            }));
         final provider = RealPriceProvider(sp,
             dio: Dio()..httpClientAdapter = adapter, clock: clock.call);
         await expectLater(provider.latest(Metal.gold), throwsException);
-        expect(sp.getDouble('gold-api_gold_observed_high'), isNull,
+        expect(sp.getDouble('oropocket_gold_observed_high'), isNull,
             reason: 'price $bad must not persist');
       }
     });
@@ -128,11 +147,11 @@ void main() {
         final clock = FakeClock(DateTime.now());
         final ts = clock.now.toUtc().add(offset);
         final adapter = FakeAdapter((_) async =>
-            jsonBody({...goldPayload(clock), 'updatedAt': ts.toIso8601String()}));
+            jsonBody({...goldPayload(clock), 'asOf': ts.toIso8601String()}));
         final provider = RealPriceProvider(sp,
             dio: Dio()..httpClientAdapter = adapter, clock: clock.call);
         await expectLater(provider.latest(Metal.gold), throwsException);
-        expect(sp.getDouble('gold-api_gold_observed_high'), isNull);
+        expect(sp.getDouble('oropocket_gold_observed_high'), isNull);
       }
     });
 
@@ -220,8 +239,8 @@ void main() {
 
     test('observed high window start is preserved across refreshes', () async {
       SharedPreferences.setMockInitialValues({
-        'gold-api_gold_observed_high': 90000.0,
-        'gold-api_gold_observed_high_since': '2026-11-01T00:00:00.000Z',
+        'oropocket_gold_observed_high': 90000.0,
+        'oropocket_gold_observed_high_since': '2026-11-01T00:00:00.000Z',
       });
       final sp = await SharedPreferences.getInstance();
       final adapter =
@@ -252,14 +271,78 @@ void main() {
       expect(sp.getDouble('gold_observed_high'), 999999.0);
     });
 
-    test('a configured worker URL is ignored: gold-api is always used',
+    test('a configured worker URL is ignored: /api/prices is always used',
         () async {
       final (provider, adapter, _) = await makeProvider(
           (_) async => jsonBody(goldPayload(FakeClock(DateTime.now()))),
           prefs: {'price_worker_url': 'https://worker.example/prices'});
       final snap = await provider.latest(Metal.gold);
-      expect(snap.source, 'gold-api.com');
-      expect(adapter.paths.single, contains('api.gold-api.com'));
+      expect(snap.source, 'OroPocket');
+      expect(adapter.paths.single, contains('/api/prices'));
+    });
+
+    test('sell rate, GST breakout and purity surface on the snapshot',
+        () async {
+      final (provider, _, _) = await makeProvider(
+          (_) async => jsonBody(goldPayload(FakeClock(DateTime.now()))));
+      final snap = await provider.latest(Metal.gold);
+      expect(snap.price, closeTo(100000, 1)); // 10000/g x10, ex-GST
+      expect(snap.sellPrice, closeTo(96000, 1)); // 9600/g x10
+      expect(snap.gstAmount, closeTo(3000, 1)); // 300/g x10, separate
+      expect(snap.purity, '24K 99.9%');
+      final silver = await provider.latest(Metal.silver);
+      expect(silver.price, closeTo(100000, 1)); // 100/g x1000
+      expect(silver.purity, '99.9%');
+    });
+
+    test('one combined request serves both metals', () async {
+      final (provider, adapter, _) = await makeProvider(
+          (_) async => jsonBody(goldPayload(FakeClock(DateTime.now()))));
+      await provider.latest(Metal.gold);
+      await provider.latest(Metal.silver);
+      expect(adapter.calls, 1);
+    });
+
+    test('server-flagged stale quote at 29min accepted, 31min rejected',
+        () async {
+      final clock = FakeClock(DateTime.now());
+      final at = clock.now.toUtc().subtract(const Duration(minutes: 29));
+      final (p1, _, _) = await makeProvider((_) async => jsonBody({
+            ...goldPayload(clock),
+            'asOf': at.toIso8601String(),
+            'stale': true,
+          }));
+      final snap = await p1.latest(Metal.gold);
+      expect(snap.updatedAt, at);
+      // 31 minutes: beyond the 30-minute client cap -> rejected even flagged
+      SharedPreferences.setMockInitialValues({});
+      final sp = await SharedPreferences.getInstance();
+      final clock2 = FakeClock(DateTime.now());
+      final old31 = clock2.now.toUtc().subtract(const Duration(minutes: 31));
+      final adapter = FakeAdapter((_) async => jsonBody({
+            ...goldPayload(clock2),
+            'asOf': old31.toIso8601String(),
+            'stale': true,
+          }));
+      final p2 = RealPriceProvider(sp,
+          dio: Dio()..httpClientAdapter = adapter, clock: clock2.call);
+      await expectLater(p2.latest(Metal.gold), throwsException);
+      expect(sp.getDouble('oropocket_gold_observed_high'), isNull,
+          reason: 'over-cap quote must not persist');
+    });
+
+    test('server-flagged stale quote is accepted with its real age',
+        () async {
+      final clock = FakeClock(DateTime.now());
+      final staleTs = clock.now.toUtc().subtract(const Duration(minutes: 20));
+      final (provider, _, _) = await makeProvider((_) async => jsonBody({
+            ...goldPayload(clock),
+            'asOf': staleTs.toIso8601String(),
+            'stale': true,
+          }));
+      final snap = await provider.latest(Metal.gold);
+      expect(snap.updatedAt, staleTs);
+      expect(snap.isStale(clock.now), isTrue);
     });
   });
 

@@ -92,14 +92,19 @@ class LiveSpotCard extends StatelessWidget {
         Text(
             stale
                 ? '${snapshot.metal.label.toUpperCase()} - LAST KNOWN (STALE)'
-                : '${snapshot.metal.label.toUpperCase()} - LIVE SPOT',
+                : '${snapshot.metal.label.toUpperCase()} - LIVE RATE',
             style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
                 color: Colors.white)),
         const SizedBox(height: 8),
         Wrap(spacing: 16, runSpacing: 6, children: [
-          _Fact('Price', '₹${fmt(snapshot.price)} / ${snapshot.unit}'),
+          _Fact('Buy (ex-GST)', '₹${fmt(snapshot.price)} / ${snapshot.unit}'),
+          if (snapshot.gstAmount != null)
+            _Fact('+3% GST', '₹${fmt(snapshot.gstAmount!)} / ${snapshot.unit}'),
+          if (snapshot.sellPrice != null)
+            _Fact('Sell rate', '₹${fmt(snapshot.sellPrice!)} / ${snapshot.unit}'),
+          if (snapshot.purity != null) _Fact('Purity', snapshot.purity!),
           _Fact('High since $sinceLabel', '₹${fmt(snapshot.recentHigh)}'),
           _Fact('Below that high', '${snapshot.drawdownPct.toStringAsFixed(2)}%'),
           _Fact('Updated', timeFmt(snapshot.updatedAt)),
@@ -115,8 +120,10 @@ class LiveSpotCard extends StatelessWidget {
         ],
         const SizedBox(height: 10),
         Text(
-            'International spot price converted to INR - not Indian retail rates '
-            '(excludes duties, GST, premiums). The high shown is the highest price '
+            'Indian retail rate from OroPocket (${snapshot.metal == Metal.gold ? "24K 99.9% gold" : "99.9% silver"}): '
+            'the buy rate excludes 3% GST, shown separately; the sell rate is '
+            'what a seller receives. These are OroPocket\'s tradeable rates, '
+            'not jeweller or 22K rates. The high shown is the highest price '
             'observed by this app since the date above, not a market historical '
             'high, so buy/wait signals are paused.',
             style: GoogleFonts.poppins(

@@ -220,10 +220,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         const Text(
-            'Prices come from gold-api.com (international spot). Custom price '
-            'workers are disabled in this release: an unverified endpoint '
-            'previously caused simulated prices to appear as live data. Any '
-            'saved worker URL is cleared on save.',
+            'Prices come from OroPocket (Indian retail: 24K 99.9% gold and '
+            '99.9% silver buy/sell rates, INR, 3% GST shown separately) via '
+            'the app\'s cached /api/prices route (same host on web; '
+            'metly-gold.vercel.app on other platforms). Custom price workers are '
+            'disabled in this release: an unverified endpoint previously '
+            'caused simulated prices to appear as live data. Any saved '
+            'worker URL is cleared on save.',
             style: TextStyle(color: Colors.white70, fontSize: 13)),
         const SizedBox(height: 8),
         TextFormField(

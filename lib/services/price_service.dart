@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/price_model.dart';
 
@@ -24,13 +25,21 @@ class RealPriceProvider implements PriceProvider {
   /// arbitrary configured URL cannot prove schema, currency/unit semantics
   /// or historical-high provenance, and the repo's own worker was a jitter
   /// simulator (now quarantined). A legacy saved URL is simply never read.
-  /// All prices come from gold-api.com. Cache, in-flight requests and
-  /// persisted observed highs are scoped to the source identity captured at
-  /// request start, so a mid-flight settings change can never contaminate
-  /// history.
-  static const String _sourceKey = 'gold-api';
+  /// All prices come from the app's own same-origin `/api/prices` route, a
+  /// bounded server-side cache in front of OroPocket's free public endpoint
+  /// (Indian retail: 24K 99.9% gold and 99.9% silver, INR per gram, buy and
+  /// sell, 3% GST broken out). Cache, in-flight requests and persisted
+  /// observed highs are scoped to the source identity captured at request
+  /// start, so a mid-flight settings change can never contaminate history.
+  static const String _sourceKey = 'oropocket';
 
-  static const String _goldApiBase = 'https://api.gold-api.com/price';
+  /// Same-origin server cache (Vercel serverless function) on web, where the
+  /// app is served from the same deployment as the function. Non-web builds
+  /// (Android etc.) have no same origin - Uri.base is file:/// there - so
+  /// they call the production deployment's function explicitly.
+  static final String _endpoint = kIsWeb
+      ? Uri.base.resolve('/api/prices').toString()
+      : 'https://metly-gold.vercel.app/api/prices';
   static const Duration _cacheTtl = Duration(seconds: 30);
 
   // Short in-memory cache: providers ask clients not to poll faster than
@@ -61,18 +70,37 @@ class RealPriceProvider implements PriceProvider {
     return future;
   }
 
+  // One request serves BOTH metals; the combined in-flight future is shared
+  // so a gold+silver dashboard refresh fans out to a single /api/prices hit.
+  Future<void>? _combinedInflight;
+
   Future<PriceSnapshot> _fetch(Metal metal, String src) async {
-    final res = await _dio.get(
-        '$_goldApiBase/${metal == Metal.gold ? 'XAU' : 'XAG'}/INR');
-    final snap = _parseGoldApi(metal, res.data, src);
-    _cache['$src:${metal.id}'] = (
-      snap,
-      _earliest([
-        _now().add(_ttlFromHeaders(res.headers)),
-        snap.freshUntil,
-      ])
-    );
-    return snap;
+    _combinedInflight ??= _fetchCombined(src).whenComplete(() {
+      _combinedInflight = null;
+    });
+    await _combinedInflight;
+    final cached = _cache['$src:${metal.id}'];
+    if (cached == null) {
+      throw Exception('Combined price payload missing ${metal.id}');
+    }
+    return cached.$1;
+  }
+
+  Future<void> _fetchCombined(String src) async {
+    final res = await _dio.get(_endpoint);
+    final data = res.data;
+    if (data is! Map) throw Exception('Unexpected response shape');
+    final serverStale = data['stale'] == true;
+    for (final metal in Metal.values) {
+      final snap = _parseOroPocket(metal, data, src, serverStale: serverStale);
+      _cache['$src:${metal.id}'] = (
+        snap,
+        _earliest([
+          _now().add(_ttlFromHeaders(res.headers)),
+          snap.freshUntil,
+        ])
+      );
+    }
   }
 
   static DateTime _earliest(List<DateTime> times) =>
@@ -88,32 +116,45 @@ class RealPriceProvider implements PriceProvider {
     return _cacheTtl;
   }
 
-  PriceSnapshot _parseGoldApi(Metal metal, dynamic data, String src) {
-    if (data is! Map) throw Exception('Unexpected response shape');
-    final expectedSymbol = metal == Metal.gold ? 'XAU' : 'XAG';
+  PriceSnapshot _parseOroPocket(Metal metal, Map data, String src,
+      {bool serverStale = false}) {
     // Source metadata is required, not optional: a response that cannot
-    // prove it is the requested metal in INR is rejected.
-    if (data['symbol'] != expectedSymbol) {
-      throw Exception('Missing or unexpected symbol in response');
+    // prove it is the OroPocket payload for the requested metal is rejected.
+    if (data['source'] != 'oropocket') {
+      throw Exception('Missing or unexpected source in response');
     }
-    if (data['currency'] != 'INR') {
-      throw Exception('Missing or unexpected currency in response');
+    final section = data[metal.id];
+    if (section is! Map) {
+      throw Exception('Missing ${metal.id} section in response');
     }
     // Validate everything before touching the persisted observed high, so a
     // bad payload can never poison history.
-    final pricePerOz = PriceLogic.validatePrice(data['price']);
-    final updatedAt =
-        PriceLogic.validateUpdatedAt(data['updatedAt'], now: _now());
-    final price = PriceLogic.ozToDisplay(pricePerOz, metal);
+    final buyPerGram = PriceLogic.validatePrice(section['buyPerGram']);
+    final sellPerGram = PriceLogic.validatePrice(section['sellPerGram']);
+    final gstPerGram = section['gstPerGram'] is num
+        ? (section['gstPerGram'] as num).toDouble()
+        : throw Exception('Missing or non-numeric gstPerGram');
+    if (!gstPerGram.isFinite || gstPerGram < 0) {
+      throw Exception('Invalid gstPerGram value');
+    }
+    // A quote the server flags as stale may be older than the normal 15-min
+    // window; accept its real age and let the UI staleness machinery label
+    // it, rather than rejecting last-known data outright.
+    final updatedAt = PriceLogic.validateUpdatedAt(data['asOf'],
+        now: _now(), allowStale: serverStale);
+    final price = PriceLogic.gramToDisplay(buyPerGram, metal);
     final high = _rollingHigh(metal, price, src);
     return PriceSnapshot(
       metal: metal,
       price: price,
+      sellPrice: PriceLogic.gramToDisplay(sellPerGram, metal),
+      gstAmount: PriceLogic.gramToDisplay(gstPerGram, metal),
+      purity: metal == Metal.gold ? '24K 99.9%' : '99.9%',
       recentHigh: high.$1,
       highIsObserved: true,
       highObservedSince: high.$2,
       updatedAt: updatedAt,
-      source: 'gold-api.com',
+      source: 'OroPocket',
     );
   }
 
@@ -144,12 +185,24 @@ class PriceLogic {
   static const Duration maxPriceAge = Duration(minutes: 15);
   static const Duration maxFutureSkew = Duration(minutes: 5);
 
+  /// Cap for server-flagged stale quotes, aligned with the server's own
+  /// 30-minute stale-serving bound: a quote older than this is rejected
+  /// outright even when the server (or a future misbehaving proxy) flags
+  /// it as merely stale.
+  static const Duration maxStaleAge = Duration(minutes: 30);
+
   /// Convert an INR-per-troy-ounce spot price to the app's display units
   /// (gold: INR/10g, silver: INR/kg).
   static double ozToDisplay(double pricePerOz, Metal metal) =>
       metal == Metal.gold
           ? pricePerOz / troyOzGrams * 10
           : pricePerOz / troyOzGrams * 1000;
+
+  /// Convert an INR-per-gram retail price to the app's display units
+  /// (gold: INR/10g, silver: INR/kg). Plain unit arithmetic, not a rate
+  /// conversion.
+  static double gramToDisplay(double pricePerGram, Metal metal) =>
+      metal == Metal.gold ? pricePerGram * 10 : pricePerGram * 1000;
 
   /// Validate a raw price field: must be a finite, positive number.
   static double validatePrice(dynamic raw) {
@@ -167,7 +220,8 @@ class PriceLogic {
   /// Parse and sanity-check a provider timestamp: explicit zone required,
   /// out-of-range components rejected (never normalized into a different
   /// valid date), not stale, not in the future beyond small clock skew.
-  static DateTime validateUpdatedAt(dynamic raw, {DateTime? now}) {
+  static DateTime validateUpdatedAt(dynamic raw,
+      {DateTime? now, bool allowStale = false}) {
     if (raw is! String) throw Exception('Missing updatedAt');
     final text = raw.trim();
     final m = _tsPattern.firstMatch(text);
@@ -193,8 +247,11 @@ class PriceLogic {
     if (ts.isAfter(ref.add(maxFutureSkew))) {
       throw Exception('Price timestamp in the future');
     }
-    if (ts.isBefore(ref.subtract(maxPriceAge))) {
+    if (!allowStale && ts.isBefore(ref.subtract(maxPriceAge))) {
       throw Exception('Price data stale');
+    }
+    if (allowStale && ts.isBefore(ref.subtract(maxStaleAge))) {
+      throw Exception('Stale quote beyond 30-minute cap rejected');
     }
     return ts;
   }

@@ -1,7 +1,7 @@
 // Dev-only pixel harness. Not referenced by the app; used to capture
 // readable fixture screenshots of dashboard states. Run:
 //   flutter build web -t tool/dev_preview.dart
-// States via query param: ?state=stale-pending | stream-error
+// States via query param: ?state=stale-pending | stream-error | pending | live
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,8 +33,12 @@ class _FakeFirestorePending extends FirestoreService {
 }
 
 class _FixtureProvider implements PriceProvider {
-  _FixtureProvider({this.hangFromStart = false});
+  _FixtureProvider({this.hangFromStart = false, this.fresh = false});
   final bool hangFromStart;
+
+  /// ?state=live: fresh (non-stale) snapshots so the LIVE RATE title and
+  /// current-quote rendering are capturable.
+  final bool fresh;
   int _calls = 0;
   @override
   Future<PriceSnapshot> latest(Metal metal) {
@@ -42,15 +46,22 @@ class _FixtureProvider implements PriceProvider {
     if (hangFromStart || _calls > 2) {
       return Completer<PriceSnapshot>().future; // fetch hangs
     }
-    final updated = DateTime.now().subtract(const Duration(hours: 1));
+    // 20 minutes old: past the 15-minute client freshness window but inside
+    // the 30-minute stale cap - a state the real server path can produce.
+    final updated = fresh
+        ? DateTime.now()
+        : DateTime.now().subtract(const Duration(minutes: 20));
     return Future.value(PriceSnapshot(
       metal: metal,
       price: 123216,
+      sellPrice: 119518,
+      gstAmount: 3696,
+      purity: metal == Metal.gold ? '24K 99.9%' : '99.9%',
       recentHigh: 123216,
       updatedAt: updated,
       highIsObserved: true,
       highObservedSince: updated,
-      source: 'gold-api.com',
+      source: 'OroPocket',
     ));
   }
 }
@@ -72,7 +83,8 @@ Future<void> main() async {
     ),
     home: DashboardScreen(
       prefs: prefs,
-      providerOverride: _FixtureProvider(hangFromStart: state == 'pending'),
+      providerOverride: _FixtureProvider(
+          hangFromStart: state == 'pending', fresh: state == 'live'),
       firestoreOverride:
           state == 'stream-error' ? _FakeFirestoreError() : _FakeFirestorePending(),
     ),

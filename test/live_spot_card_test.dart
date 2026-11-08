@@ -14,19 +14,19 @@ void main() {
     updatedAt: DateTime.now(),
     highIsObserved: true,
     highObservedSince: DateTime.utc(2026, 11, 1),
-    source: 'gold-api.com',
+    source: 'OroPocket',
   );
 
-  testWidgets('LiveSpotCard shows neutral spot info, no buy/wait verdict',
+  testWidgets('LiveSpotCard shows neutral buy-rate info, no buy/wait verdict',
       (tester) async {
     await tester.pumpWidget(wrap(LiveSpotCard(snapshot: snapshot)));
-    expect(find.text('GOLD - LIVE SPOT'), findsOneWidget);
+    expect(find.text('GOLD - LIVE RATE'), findsOneWidget);
     expect(find.textContaining('signals are paused'), findsOneWidget);
-    expect(find.textContaining('not Indian retail rates'), findsOneWidget);
+    expect(find.textContaining('not jeweller or 22K rates'), findsOneWidget);
     expect(find.textContaining('highest price observed by this app since'),
         findsOneWidget);
     // Attribution is visible.
-    expect(find.textContaining('gold-api.com', findRichText: true), findsOneWidget);
+    expect(find.textContaining('OroPocket', findRichText: true), findsWidgets);
     // No trading verdict anywhere on the card.
     expect(find.textContaining('BUY'), findsNothing);
     expect(find.textContaining('WAIT'), findsNothing);

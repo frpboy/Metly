@@ -102,18 +102,18 @@ void main() {
     await pumpDashboard(tester, provider: provider);
     await tester.pumpAndSettle();
     expect(find.textContaining('Live prices unavailable'), findsOneWidget);
-    expect(find.textContaining('LIVE SPOT'), findsNothing);
+    expect(find.textContaining('LIVE RATE'), findsNothing);
     expect(find.textContaining('BUY'), findsNothing);
     await tester.pumpWidget(const SizedBox()); // dispose, cancels timer
   });
 
-  testWidgets('success shows neutral live spot cards, no verdicts',
+  testWidgets('success shows neutral live buy-rate cards, no verdicts',
       (tester) async {
     final provider = FakeProvider((m) async => snap(m));
     await pumpDashboard(tester, provider: provider);
     await tester.pumpAndSettle();
-    expect(find.text('GOLD - LIVE SPOT'), findsOneWidget);
-    expect(find.text('SILVER - LIVE SPOT'), findsOneWidget);
+    expect(find.text('GOLD - LIVE RATE'), findsOneWidget);
+    expect(find.text('SILVER - LIVE RATE'), findsOneWidget);
     expect(find.textContaining('signals are paused'), findsWidgets);
     expect(find.textContaining('BUY'), findsNothing);
     await tester.pumpWidget(const SizedBox());
@@ -143,7 +143,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Genuine-high fresh snapshots: signal cards visible, AI allowed.
-    expect(find.textContaining('LIVE SPOT'), findsNothing);
+    expect(find.textContaining('LIVE RATE'), findsNothing);
 
     await tester.tap(find.text('Ask AI'));
     await tester.pump();
@@ -286,7 +286,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('stale cards show LAST KNOWN, never LIVE SPOT, during a pending refresh',
+  testWidgets('stale cards show LAST KNOWN, never LIVE RATE, during a pending refresh',
       (tester) async {
     final t0 = DateTime.now();
     final clock = DashClock(t0);
@@ -297,14 +297,14 @@ void main() {
     });
     await pumpDashboard(tester, provider: provider, clock: clock.call);
     await tester.pumpAndSettle();
-    expect(find.text('GOLD - LIVE SPOT'), findsOneWidget);
+    expect(find.text('GOLD - LIVE RATE'), findsOneWidget);
 
     hang = true;
     clock.now = t0.add(const Duration(minutes: 16));
     await tester.pump(const Duration(minutes: 15, milliseconds: 50));
     expect(find.text('GOLD - LAST KNOWN (STALE)'), findsOneWidget);
     expect(find.text('SILVER - LAST KNOWN (STALE)'), findsOneWidget);
-    expect(find.textContaining('LIVE SPOT'), findsNothing);
+    expect(find.textContaining('LIVE RATE'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
