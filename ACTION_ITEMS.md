@@ -45,7 +45,7 @@ npx -y vercel@latest deploy --prod
 ### 3️⃣ Deploy the Cloudflare Workers (already done, but keep for reference)
 | When | Where | What | Why |
 |------|-------|------|-----|
-| **Now (or later)** | Cloudflare Dashboard → **Workers & Pages** | • **AI Proxy Worker** – paste `backend/ai-proxy/worker.js`.<br>• **Price Feed Worker** – paste `backend/price-worker/worker.js`. | These workers expose the OpenRouter API and the simulated gold/silver price feed to the Flutter app. |
+| **Now (or later)** | Cloudflare Dashboard → **Workers & Pages** | • **AI Proxy Worker** – paste `backend/ai-proxy/worker.js`.<br>• ~~Price Feed Worker~~ – REMOVED: the old `backend/price-worker/worker.js` was a random-jitter simulator and is quarantined under `backend/_quarantined-price-worker-simulator/`. The app now fetches real spot prices directly from gold-api.com; do not deploy the simulator as a price source. | The AI proxy worker exposes OpenRouter to the Flutter app. |
 | **After creating each worker** | Settings → **Variables** | Add the required environment variables:<br>• `OPENROUTER_API_KEY` – your OpenRouter key.<br>• `METLY_PROXY_TOKEN` – a strong random token (store it in the app). | The workers need these values to authenticate requests. |
 | **After both workers are live** | Note the URLs (e.g. `https://metly-ai-proxy.<sub>.workers.dev/v1/chat/completions` and `https://metly-price-feed.<sub>.workers.dev`). | You will paste these URLs into the Metly app Settings screen. |
 
@@ -100,7 +100,7 @@ flutter build apk --release   # or flutter run for a device
 | 3 | Build Web | project root | `flutter build web --release` |
 | 4 | Deploy Web | project root | `npx -y vercel@latest deploy --prod` |
 | 5 | Deploy AI Proxy | Cloudflare → Workers | `backend/ai-proxy/worker.js` |
-| 6 | Deploy Price Worker | Cloudflare → Workers | `backend/price-worker/worker.js` |
+| ~~6~~ | ~~Deploy Price Worker~~ REMOVED - simulator quarantined, app uses gold-api.com directly | - | ~~`backend/price-worker/worker.js`~~ |
 | 7 | Set app URLs | Metly Settings (web) | Proxy URL, Proxy Token, Price Worker URL |
 | 8 | Enable Firestore (test mode) | Firebase Console | – |
 | 9 | Install Java 11 | Windows | Download JDK 11, set `JAVA_HOME` |

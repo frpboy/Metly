@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,17 +15,40 @@ import '../widgets/signal_card.dart';
 
 class DashboardScreen extends StatefulWidget {
   final SharedPreferences prefs;
-  const DashboardScreen({super.key, required this.prefs});
+
+  /// Test/seam overrides; production uses the real implementations.
+  final PriceProvider? providerOverride;
+  final FirestoreService? firestoreOverride;
+  final AiClient? aiOverride;
+
+  /// Clock seam for aging tests.
+  final DateTime Function()? clockOverride;
+  const DashboardScreen(
+      {super.key,
+      required this.prefs,
+      this.providerOverride,
+      this.firestoreOverride,
+      this.aiOverride,
+      this.clockOverride});
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
-  late final PriceProvider provider = RealPriceProvider(widget.prefs);
-  final FirestoreService _firestore = FirestoreService();
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
+  Timer? _stalenessTimer;
+  Timer? _staleDeadlineTimer;
+  late final DateTime Function() _clock = widget.clockOverride ?? DateTime.now;
+  late final PriceProvider provider =
+      widget.providerOverride ?? RealPriceProvider(widget.prefs);
+  late final FirestoreService _firestore =
+      widget.firestoreOverride ?? FirestoreService();
+  int _refreshGen = 0;
+  int _aiGen = 0;
   PriceSnapshot? gold;
   PriceSnapshot? silver;
   bool loading = false;
+  String? loadError;
   bool aiBusy = false;
   String? aiText;
   bool sipEnabled = false;
@@ -32,41 +56,131 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Time-passage revalidation: a displayed snapshot must not sit on screen
+    // as live past its freshness window.
+    _stalenessTimer = Timer.periodic(
+        const Duration(minutes: 1), (_) => _revalidateIfStale());
     _refresh();
   }
 
-  Future<void> _refresh() async {
-    setState(() => loading = true);
-    final g = await provider.latest(Metal.gold);
-    final s = await provider.latest(Metal.silver);
-    setState(() {
-      gold = g;
-      silver = s;
-      loading = false;
-      aiText = null;
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stalenessTimer?.cancel();
+    _staleDeadlineTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _revalidateIfStale();
+  }
+
+  void _revalidateIfStale() {
+    if (loading) return;
+    final now = _clock();
+    final stale = (gold?.isStale(now) ?? false) || (silver?.isStale(now) ?? false);
+    if (stale) _refresh();
+  }
+
+  /// Relabel cards as stale the moment the first snapshot crosses its
+  /// freshness deadline, and refresh. A 60s backstop timer covers clock
+  /// jumps; this deadline timer is exact, so a card never sits looking live
+  /// past its freshness window.
+  void _scheduleStaleDeadline() {
+    _staleDeadlineTimer?.cancel();
+    final now = _clock();
+    final deadlines = [
+      if (gold != null) gold!.freshUntil,
+      if (silver != null) silver!.freshUntil,
+    ];
+    if (deadlines.isEmpty) return;
+    final first = deadlines.reduce((a, b) => a.isBefore(b) ? a : b);
+    final wait = first.difference(now);
+    _staleDeadlineTimer = Timer(wait <= Duration.zero ? Duration.zero : wait,
+        () {
+      if (!mounted) return;
+      setState(() {}); // stale warnings appear immediately
+      _revalidateIfStale();
     });
+  }
+
+  Future<void> _refresh() async {
+    if (loading) return; // one refresh at a time
+    final gen = ++_refreshGen;
+    _aiGen++; // any in-flight AI answer now belongs to old data
+    setState(() {
+      loading = true;
+      loadError = null;
+      aiText = null;
+      aiBusy = false; // in-flight AI is invalidated below; button recovers
+    });
+    try {
+      final g = await provider.latest(Metal.gold);
+      final s = await provider.latest(Metal.silver);
+      if (!mounted || gen != _refreshGen) return;
+      setState(() {
+        gold = g;
+        silver = s;
+      });
+      _scheduleStaleDeadline();
+    } catch (e) {
+      if (!mounted || gen != _refreshGen) return;
+      // Never leave stale data on screen looking live after a failed load.
+      setState(() {
+        loadError =
+            'Live prices unavailable right now. Pull to refresh to retry.';
+        gold = null;
+        silver = null;
+        aiText = null;
+      });
+    } finally {
+      if (mounted && gen == _refreshGen) setState(() => loading = false);
+    }
   }
 
   Future<void> _askAI() async {
     if (gold == null || silver == null) return;
-    final client = OpenRouterClient(widget.prefs);
-    final gSig = evaluateSignal(gold!, now: DateTime.now());
-    final sSig = evaluateSignal(silver!, now: DateTime.now());
+    final now = _clock();
+    if (gold!.isStale(now) || silver!.isStale(now)) {
+      setState(() => aiText =
+          'Price data is stale. Refresh before asking for an explanation.');
+      return;
+    }
+    if (gold!.highIsObserved || silver!.highIsObserved) {
+      setState(() => aiText =
+          'Signals are paused while only rolling observed highs are available. '
+          'They resume once a price source with a verified historical-high contract is configured.');
+      return;
+    }
+    if (loading) return; // never explain while fresh data is loading
+    final g = gold!;
+    final s = silver!;
+    final client = widget.aiOverride ?? OpenRouterClient(widget.prefs);
+    final gSig = evaluateSignal(g, now: _clock());
+    final sSig = evaluateSignal(s, now: _clock());
+    final gen = ++_aiGen;
     setState(() => aiBusy = true);
     try {
       final text = await client.explainSignals(
-          gold: gold!, goldSig: gSig, silver: silver!, silverSig: sSig);
+          gold: g, goldSig: gSig, silver: s, silverSig: sSig);
+      // A late answer must not land on top of newer or failed data.
+      if (!mounted || gen != _aiGen || !identical(gold, g) || !identical(silver, s)) {
+        return;
+      }
       setState(() => aiText = text);
     } catch (e) {
+      if (!mounted || gen != _aiGen) return;
       setState(() => aiText = 'AI error: $e');
     } finally {
-      setState(() => aiBusy = false);
+      if (mounted && gen == _aiGen) setState(() => aiBusy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
+    final now = _clock();
     return Scaffold(
       drawer: const MetlyDrawer(),
       appBar: const MetlyAppBar(
@@ -91,17 +205,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 side: BorderSide(color: Cfg.gold.withValues(alpha: 0.35))),
             const Spacer(),
             FilledButton.icon(
-                onPressed: aiBusy ? null : _askAI,
+                onPressed: (aiBusy || loading) ? null : _askAI,
                 style: FilledButton.styleFrom(
                     backgroundColor: Colors.black, foregroundColor: Colors.white),
                 icon: Icon(aiBusy ? Icons.hourglass_top : Icons.auto_awesome),
                 label: Text(aiBusy ? 'Thinking…' : 'Ask AI')),
           ]),
           const SizedBox(height: 12),
+          if (loadError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(loadError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+            ),
           if (gold != null)
-            SignalCard(snapshot: gold!, result: evaluateSignal(gold!, now: now)),
+            gold!.highIsObserved
+                ? LiveSpotCard(snapshot: gold!, now: _clock)
+                : SignalCard(
+                    snapshot: gold!,
+                    result: evaluateSignal(gold!, now: now),
+                    now: _clock),
           if (silver != null)
-            SignalCard(snapshot: silver!, result: evaluateSignal(silver!, now: now)),
+            silver!.highIsObserved
+                ? LiveSpotCard(snapshot: silver!, now: _clock)
+                : SignalCard(
+                    snapshot: silver!,
+                    result: evaluateSignal(silver!, now: now),
+                    now: _clock),
           const SizedBox(height: 12),
           if (sipEnabled)
             const Text('SIP tip: Invest regularly to average risk and returns.',
@@ -114,7 +245,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           StreamBuilder<List<WatchlistItem>>(
             stream: _firestore.watchlistStream(),
             builder: (context, snapshot) {
-              if (!snapshot.hasData) return const CircularProgressIndicator();
+              if (snapshot.hasError) {
+                return const Text('Watchlist unavailable',
+                    style: TextStyle(color: Colors.redAccent, fontSize: 13));
+              }
+              if (!snapshot.hasData) {
+                return const Center(
+                    child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5)));
+              }
               final items = snapshot.data!;
               if (items.isEmpty) return const Text('No watchlist items', style: TextStyle(color: Colors.white70));
               return ListView.builder(
@@ -138,7 +279,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           StreamBuilder<List<PortfolioItem>>(
             stream: _firestore.portfolioStream(),
             builder: (context, snapshot) {
-              if (!snapshot.hasData) return const CircularProgressIndicator();
+              if (snapshot.hasError) {
+                return const Text('Portfolio unavailable',
+                    style: TextStyle(color: Colors.redAccent, fontSize: 13));
+              }
+              if (!snapshot.hasData) {
+                return const Center(
+                    child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5)));
+              }
               final items = snapshot.data!;
               if (items.isEmpty) return const Text('No portfolio items', style: TextStyle(color: Colors.white70));
               return ListView.builder(

@@ -76,8 +76,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await widget.prefs.setString(Cfg.prefsKeyModel, _modelCtrl.text.trim());
     await widget.prefs.setString(Cfg.prefsProxyUrl, _proxyUrlCtrl.text.trim());
     await widget.prefs.setString(Cfg.prefsProxyTok, _proxyTokCtrl.text.trim());
-    await widget.prefs
-        .setString(Cfg.prefsPriceWorkerUrl, _priceWorkerUrlCtrl.text.trim());
+    // Custom price workers are disabled in this release; reset any legacy
+    // saved URL rather than keep trusting it.
+    await widget.prefs.remove(Cfg.prefsPriceWorkerUrl);
     await widget.prefs.setBool(Cfg.entSubActive, _subActive);
     await widget.prefs.setBool(Cfg.entLifetime, _lifeActive);
     if (!mounted) return;
@@ -218,16 +219,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: GoogleFonts.poppins(
                 fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
+        const Text(
+            'Prices come from gold-api.com (international spot). Custom price '
+            'workers are disabled in this release: an unverified endpoint '
+            'previously caused simulated prices to appear as live data. Any '
+            'saved worker URL is cleared on save.',
+            style: TextStyle(color: Colors.white70, fontSize: 13)),
+        const SizedBox(height: 8),
         TextFormField(
           controller: _priceWorkerUrlCtrl,
-          style: const TextStyle(color: Colors.white),
+          enabled: false,
+          style: const TextStyle(color: Colors.white38),
           decoration: const InputDecoration(
-              labelText: 'Price Worker URL',
-              labelStyle: TextStyle(color: Colors.white70),
-              enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white24)),
-              focusedBorder:
-                  OutlineInputBorder(borderSide: BorderSide(color: Cfg.gold))),
+              labelText: 'Price Worker URL (disabled this release)',
+              labelStyle: TextStyle(color: Colors.white38),
+              disabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white12))),
         ),
         const SizedBox(height: 16),
         FilledButton.icon(

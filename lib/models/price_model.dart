@@ -16,16 +16,34 @@ class PriceSnapshot {
   final double price;
   final double recentHigh;
   final DateTime updatedAt;
+
+  /// True when [recentHigh] is a rolling high of prices observed by this
+  /// device since [highObservedSince], not a genuine market historical high.
+  final bool highIsObserved;
+  final DateTime? highObservedSince;
+
+  /// Human-readable name of the data source, shown in the UI.
+  final String source;
   PriceSnapshot(
       {required this.metal,
       required this.price,
       required this.recentHigh,
-      required this.updatedAt});
+      required this.updatedAt,
+      this.highIsObserved = false,
+      this.highObservedSince,
+      this.source = 'gold-api.com'});
   double get drawdownPct => ((recentHigh - price) / recentHigh * 100);
   String get unit => metal.unit;
+
+  /// Newest instant at which this snapshot may still be shown as live.
+  DateTime get freshUntil => updatedAt.add(const Duration(minutes: 15));
+
+  /// True once the snapshot reaches the end of the freshness window
+  /// (inclusive: at the exact deadline the data is already stale).
+  bool isStale(DateTime now) => !now.isBefore(freshUntil);
 }
 
-enum Signal { buy, wait }
+enum Signal { buy, wait, paused }
 
 class SignalResult {
   final Signal signal;
@@ -41,6 +59,16 @@ bool _isPostFestiveWindow(DateTime now) {
 }
 
 SignalResult evaluateSignal(PriceSnapshot s, {required DateTime now}) {
+  // Provenance guard: a rolling observed high is not a genuine historical
+  // high, so trading signals stay paused no matter who calls this.
+  if (s.highIsObserved) {
+    return const SignalResult(Signal.paused,
+        'Signals paused: only an observed rolling high is available');
+  }
+  if (s.isStale(now)) {
+    return const SignalResult(
+        Signal.paused, 'Signals paused: price data is stale - refresh');
+  }
   final dd = s.drawdownPct;
   final postFestive = _isPostFestiveWindow(now);
   if (s.metal == Metal.gold) {

@@ -7,7 +7,7 @@ import '../models/watchlist_item.dart';
 import '../models/portfolio_item.dart';
 
 class FirestoreService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  FirebaseFirestore get _db => FirebaseFirestore.instance;
   final String _userId = 'test-user-id'; // TODO: replace with real user ID
 
   // ---------- Watchlist ----------
