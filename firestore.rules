@@ -16,6 +16,7 @@ service cloud.firestore {
         && d.metal in ['gold', 'silver']
         && d.targetPrice is number
         && d.targetPrice > 0
+        && d.targetPrice < 1000000000000
         && d.addedAt is string;
     }
 
@@ -25,8 +26,10 @@ service cloud.firestore {
         && d.metal in ['gold', 'silver']
         && d.amount is number
         && d.amount > 0
+        && d.amount < 1000000000000
         && d.avgPrice is number
         && d.avgPrice > 0
+        && d.avgPrice < 1000000000000
         && d.addedAt is string;
     }
 
