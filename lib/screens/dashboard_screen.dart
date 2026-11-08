@@ -45,6 +45,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   late final PriceProvider provider =
       widget.providerOverride ?? RealPriceProvider(widget.prefs);
   late final AuthService _auth = widget.authOverride ?? metlyDefaultAuth();
+  StreamSubscription<MetlyUser?>? _authSubscription;
+  bool _authReady = false;
   int _refreshGen = 0;
   int _aiGen = 0;
   PriceSnapshot? gold;
@@ -59,16 +61,25 @@ class _DashboardScreenState extends State<DashboardScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _authReady = _auth.current != null;
+    // Own this subscription for the route lifetime, not the lazy list child.
+    _authSubscription = _auth.authChanges().listen((user) {
+      if (!mounted) return;
+      setState(() {
+        _authReady = true;
+      });
+    });
     // Time-passage revalidation: a displayed snapshot must not sit on screen
     // as live past its freshness window.
-    _stalenessTimer = Timer.periodic(
-        const Duration(minutes: 1), (_) => _revalidateIfStale());
+    _stalenessTimer =
+        Timer.periodic(const Duration(minutes: 1), (_) => _revalidateIfStale());
     _refresh();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _authSubscription?.cancel();
     _stalenessTimer?.cancel();
     _staleDeadlineTimer?.cancel();
     super.dispose();
@@ -76,13 +87,18 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _revalidateIfStale();
+    if (state == AppLifecycleState.resumed) {
+      // Read Firebase's current session again after mobile tab suspension.
+      if (mounted) setState(() {});
+      _revalidateIfStale();
+    }
   }
 
   void _revalidateIfStale() {
     if (loading) return;
     final now = _clock();
-    final stale = (gold?.isStale(now) ?? false) || (silver?.isStale(now) ?? false);
+    final stale =
+        (gold?.isStale(now) ?? false) || (silver?.isStale(now) ?? false);
     if (stale) _refresh();
   }
 
@@ -100,8 +116,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (deadlines.isEmpty) return;
     final first = deadlines.reduce((a, b) => a.isBefore(b) ? a : b);
     final wait = first.difference(now);
-    _staleDeadlineTimer = Timer(wait <= Duration.zero ? Duration.zero : wait,
-        () {
+    _staleDeadlineTimer =
+        Timer(wait <= Duration.zero ? Duration.zero : wait, () {
       if (!mounted) return;
       setState(() {}); // stale warnings appear immediately
       _revalidateIfStale();
@@ -153,7 +169,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (gold!.highIsObserved || silver!.highIsObserved) {
       setState(() => aiText =
           'Signals are paused while only rolling observed highs are available. '
-          'They resume once a price source with a verified historical-high contract is configured.');
+              'They resume once a price source with a verified historical-high contract is configured.');
       return;
     }
     if (loading) return; // never explain while fresh data is loading
@@ -168,7 +184,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       final text = await client.explainSignals(
           gold: g, goldSig: gSig, silver: s, silverSig: sSig);
       // A late answer must not land on top of newer or failed data.
-      if (!mounted || gen != _aiGen || !identical(gold, g) || !identical(silver, s)) {
+      if (!mounted ||
+          gen != _aiGen ||
+          !identical(gold, g) ||
+          !identical(silver, s)) {
         return;
       }
       setState(() => aiText = text);
@@ -180,11 +199,34 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
+  Widget _buildSavings() {
+    final user = _auth.current;
+    if (!_authReady && user == null) {
+      return const Center(
+          child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2.5)));
+    }
+    if (user == null) return const _SignedOutSavingsCard();
+    final firestore =
+        widget.firestoreOverride ?? FirestoreService(uid: user.uid);
+    return Column(
+      key: ValueKey(user.uid),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _WatchlistSection(firestore: firestore),
+        const SizedBox(height: 24),
+        _PortfolioSection(firestore: firestore),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = _clock();
     return Scaffold(
-      drawer: const MetlyDrawer(),
+      drawer: MetlyDrawer(authOverride: _auth),
       appBar: const MetlyAppBar(
           titleTop: 'Dashboard', titleBottom: 'Signals • Gold • Silver'),
       backgroundColor: const Color(0xFF0E0E0E),
@@ -209,7 +251,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             FilledButton.icon(
                 onPressed: (aiBusy || loading) ? null : _askAI,
                 style: FilledButton.styleFrom(
-                    backgroundColor: Colors.black, foregroundColor: Colors.white),
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white),
                 icon: Icon(aiBusy ? Icons.hourglass_top : Icons.auto_awesome),
                 label: Text(aiBusy ? 'Thinking…' : 'Ask AI')),
           ]),
@@ -219,7 +262,8 @@ class _DashboardScreenState extends State<DashboardScreen>
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(loadError!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+                  style:
+                      const TextStyle(color: Colors.redAccent, fontSize: 13)),
             ),
           if (gold != null)
             gold!.highIsObserved
@@ -242,31 +286,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 style: TextStyle(color: Colors.white70, fontSize: 13)),
           const SizedBox(height: 16),
           // Watchlist & Portfolio, scoped to the signed-in account.
-          StreamBuilder<MetlyUser?>(
-            stream: _auth.authChanges(),
-            builder: (context, authSnap) {
-              if (authSnap.connectionState == ConnectionState.waiting &&
-                  !authSnap.hasData) {
-                return const Center(
-                    child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2.5)));
-              }
-              final user = authSnap.data;
-              if (user == null) return const _SignedOutSavingsCard();
-              final firestore =
-                  widget.firestoreOverride ?? FirestoreService(uid: user.uid);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _WatchlistSection(firestore: firestore),
-                  const SizedBox(height: 24),
-                  _PortfolioSection(firestore: firestore),
-                ],
-              );
-            },
-          ),
+          _buildSavings(),
           const SizedBox(height: 16),
           const PlatformLinksRow(),
           const SizedBox(height: 16),
@@ -323,11 +343,11 @@ class _SignedOutSavingsCard extends StatelessWidget {
                 fontSize: 15,
                 fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
-        Text('Create a free account and your metals, targets and holdings '
+        Text(
+            'Create a free account and your metals, targets and holdings '
             'stay saved to you on every device.',
             textAlign: TextAlign.center,
-            style:
-                GoogleFonts.poppins(color: Colors.white70, fontSize: 12.5)),
+            style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12.5)),
         const SizedBox(height: 12),
         FilledButton(
           style: FilledButton.styleFrom(
@@ -458,8 +478,7 @@ class _PortfolioSection extends StatelessWidget {
                 title: Text(
                     '${it.metal.toUpperCase()} holdings: ${it.amount.toStringAsFixed(2)}',
                     style: const TextStyle(color: Colors.white)),
-                subtitle: Text(
-                    'Avg price: ₹${it.avgPrice.toStringAsFixed(2)}',
+                subtitle: Text('Avg price: ₹${it.avgPrice.toStringAsFixed(2)}',
                     style: const TextStyle(color: Colors.white54)),
                 trailing: IconButton(
                   tooltip: 'Remove holding',
@@ -550,8 +569,8 @@ Future<void> _showAddWatchlist(
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dialogCtx, false),
-              child:
-                  const Text('Cancel', style: TextStyle(color: Colors.white70))),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Colors.white70))),
           FilledButton(
             style: FilledButton.styleFrom(
                 backgroundColor: Cfg.gold, foregroundColor: Colors.black),
@@ -574,7 +593,10 @@ Future<void> _showAddWatchlist(
   final price = double.parse(priceCtrl.text.trim());
   try {
     await firestore.addWatchlistItem(WatchlistItem(
-        id: _newId(), metal: metal, targetPrice: price, addedAt: DateTime.now()));
+        id: _newId(),
+        metal: metal,
+        targetPrice: price,
+        addedAt: DateTime.now()));
   } catch (_) {
     if (context.mounted) _showSaveError(context);
   }
@@ -591,8 +613,7 @@ Future<void> _showAddPortfolio(
     builder: (dialogCtx) => StatefulBuilder(
       builder: (dialogCtx, setDlg) => AlertDialog(
         backgroundColor: const Color(0xFF141414),
-        title:
-            const Text('Add holding', style: TextStyle(color: Cfg.gold)),
+        title: const Text('Add holding', style: TextStyle(color: Cfg.gold)),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           _metalDropdown(metal, (v) => setDlg(() => metal = v)),
           const SizedBox(height: 12),
@@ -619,8 +640,8 @@ Future<void> _showAddPortfolio(
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dialogCtx, false),
-              child:
-                  const Text('Cancel', style: TextStyle(color: Colors.white70))),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Colors.white70))),
           FilledButton(
             style: FilledButton.styleFrom(
                 backgroundColor: Cfg.gold, foregroundColor: Colors.black),

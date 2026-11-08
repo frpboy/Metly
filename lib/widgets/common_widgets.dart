@@ -107,12 +107,13 @@ class _AccountTile extends StatelessWidget {
     final auth = authOverride ?? metlyDefaultAuth();
     return StreamBuilder<MetlyUser?>(
       stream: auth.authChanges(),
+      initialData: auth.current,
       builder: (context, snap) {
-        final user = snap.data;
+        // The stream triggers rebuilds; the session is the source of truth.
+        final user = auth.current;
         if (user == null) {
           return ListTile(
-              leading:
-                  const Icon(Icons.person_outline, color: Colors.white70),
+              leading: const Icon(Icons.person_outline, color: Colors.white70),
               title: const Text('Sign in / Create account'),
               onTap: () {
                 Navigator.pop(context);
@@ -124,8 +125,7 @@ class _AccountTile extends StatelessWidget {
             title: Text(user.email ?? 'Signed in',
                 overflow: TextOverflow.ellipsis),
             subtitle: const Text('Signed in',
-                style:
-                    TextStyle(color: Colors.white54, fontSize: 12)),
+                style: TextStyle(color: Colors.white54, fontSize: 12)),
             trailing: TextButton(
               child: const Text('Sign out',
                   style: TextStyle(color: Colors.white70)),

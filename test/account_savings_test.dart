@@ -44,7 +44,8 @@ class FakeAuth implements AuthService {
   }
 
   @override
-  Future<MetlyUser> signUp(String email, String password) => signIn(email, password);
+  Future<MetlyUser> signUp(String email, String password) =>
+      signIn(email, password);
   @override
   Future<void> resetPassword(String email) async {}
   @override
@@ -67,8 +68,7 @@ class RecordingFirestore extends FirestoreService {
   Future<void> addWatchlistItem(WatchlistItem item) async =>
       addedWatchlist.add(item);
   @override
-  Future<void> removeWatchlistItem(String id) async =>
-      removedWatchlist.add(id);
+  Future<void> removeWatchlistItem(String id) async => removedWatchlist.add(id);
   @override
   Stream<List<WatchlistItem>> watchlistStream() => Stream.value(watchlistItems);
   @override
@@ -152,9 +152,48 @@ void main() {
     expect(find.text('Portfolio'), findsOneWidget);
     expect(find.byTooltip('Add watchlist target'), findsOneWidget);
     expect(find.byTooltip('Add portfolio holding'), findsOneWidget);
-    expect(find.text('No watchlist items yet. Tap + to add one.'),
-        findsOneWidget);
+    expect(
+        find.text('No watchlist items yet. Tap + to add one.'), findsOneWidget);
     expect(find.text('No holdings yet. Tap + to add one.'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+      'mobile resume reconciles current session and drawer after delayed event',
+      (tester) async {
+    final auth = FakeAuth(null);
+    await pumpApp(tester, auth: auth, firestore: RecordingFirestore());
+    // Firebase can restore/update its current user before a delayed auth event.
+    auth.user = const MetlyUser(uid: 'restored', email: 'restored@example.com');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.text('Save your watchlist & portfolio'), findsNothing);
+    expect(find.text('Watchlist'), findsOneWidget);
+    await tester.tap(find.byTooltip('Menu'));
+    await tester.pumpAndSettle();
+    expect(find.text('restored@example.com'), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('auth transitions survive offscreen savings and route sign-in',
+      (tester) async {
+    final auth = FakeAuth(null);
+    await pumpApp(tester, auth: auth, firestore: RecordingFirestore());
+    await tester.tap(find.text('Sign in / Create account'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.co');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Password'), 'secret1');
+    await tester.tap(find.text('Sign in').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Watchlist'), findsOneWidget);
+    expect(find.text('Save your watchlist & portfolio'), findsNothing);
+    auth.emit(null);
+    await tester.pumpAndSettle();
+    expect(find.text('Watchlist'), findsNothing);
+    expect(find.text('Save your watchlist & portfolio'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -231,8 +270,7 @@ void main() {
       (tester) async {
     var submitted = false;
     final auth = _SubmitSpyAuth(onSubmit: () => submitted = true);
-    await tester.pumpWidget(
-        MaterialApp(home: AuthScreen(authOverride: auth)));
+    await tester.pumpWidget(MaterialApp(home: AuthScreen(authOverride: auth)));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Sign in').last);
@@ -342,8 +380,7 @@ void main() {
     await tester.tap(find.text('Forgot password?'));
     await tester.pumpAndSettle();
     expect(resets, isEmpty);
-    expect(
-        find.text('Enter your email above, then tap "Forgot password".'),
+    expect(find.text('Enter your email above, then tap "Forgot password".'),
         findsOneWidget);
 
     await tester.enterText(
@@ -368,8 +405,7 @@ void main() {
       },
     ));
     await tester.pumpAndSettle();
-    await tester.enterText(
-        find.widgetWithText(TextField, 'Email'), 'a@b.co');
+    await tester.enterText(find.widgetWithText(TextField, 'Email'), 'a@b.co');
     await tester.enterText(
         find.widgetWithText(TextField, 'Password'), 'secret1');
     await tester.tap(find.text('Sign in').last);
@@ -433,7 +469,6 @@ class _SubmitSpyAuth implements AuthService {
   @override
   Future<void> signOut() async {}
 }
-
 
 class _ResetSpyAuth implements AuthService {
   final List<String> resets;
