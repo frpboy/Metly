@@ -557,7 +557,8 @@ Future<void> _showAddWatchlist(
                 backgroundColor: Cfg.gold, foregroundColor: Colors.black),
             onPressed: () {
               final price = double.tryParse(priceCtrl.text.trim());
-              if (price == null || price <= 0) {
+              // NaN slips past <= 0 checks; require a real finite number.
+              if (price == null || !price.isFinite || price <= 0) {
                 setDlg(() => error = 'Enter a target price above zero.');
                 return;
               }
@@ -626,11 +627,12 @@ Future<void> _showAddPortfolio(
             onPressed: () {
               final amount = double.tryParse(amountCtrl.text.trim());
               final avg = double.tryParse(avgCtrl.text.trim());
-              if (amount == null || amount <= 0) {
+              // NaN slips past <= 0 checks; require real finite numbers.
+              if (amount == null || !amount.isFinite || amount <= 0) {
                 setDlg(() => error = 'Enter a quantity above zero.');
                 return;
               }
-              if (avg == null || avg <= 0) {
+              if (avg == null || !avg.isFinite || avg <= 0) {
                 setDlg(() => error = 'Enter an average price above zero.');
                 return;
               }

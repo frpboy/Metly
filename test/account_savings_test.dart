@@ -46,6 +46,8 @@ class FakeAuth implements AuthService {
   @override
   Future<MetlyUser> signUp(String email, String password) => signIn(email, password);
   @override
+  Future<void> resetPassword(String email) async {}
+  @override
   Future<void> signOut() async => emit(null);
 }
 
@@ -280,6 +282,130 @@ void main() {
             addedAt: DateTime.now())),
         throwsStateError);
   });
+
+  testWidgets('watchlist add rejects NaN and Infinity', (tester) async {
+    final fs = RecordingFirestore();
+    await pumpApp(tester, auth: FakeAuth(), firestore: fs);
+    await tester.tap(find.byTooltip('Add watchlist target'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Target price (₹)'), 'nan');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter a target price above zero.'), findsOneWidget);
+    expect(fs.addedWatchlist, isEmpty);
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Target price (₹)'), 'Infinity');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter a target price above zero.'), findsOneWidget);
+    expect(fs.addedWatchlist, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('portfolio add rejects NaN quantity and Infinity price',
+      (tester) async {
+    final fs = RecordingFirestore();
+    await pumpApp(tester, auth: FakeAuth(), firestore: fs);
+    await tester.tap(find.byTooltip('Add portfolio holding'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, 'Quantity'), 'nan');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Average buy price (₹ per unit)'),
+        '100');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter a quantity above zero.'), findsOneWidget);
+    expect(fs.addedPortfolio, isEmpty);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Quantity'), '1');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Average buy price (₹ per unit)'),
+        'Infinity');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Enter an average price above zero.'), findsOneWidget);
+    expect(fs.addedPortfolio, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('forgot password sends a reset and confirms without leaking',
+      (tester) async {
+    final resets = <String>[];
+    final auth = _ResetSpyAuth(resets);
+    await tester.pumpWidget(MaterialApp(home: AuthScreen(authOverride: auth)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+    expect(resets, isEmpty);
+    expect(
+        find.text('Enter your email above, then tap "Forgot password".'),
+        findsOneWidget);
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Email'), 'rahul@example.com');
+    await tester.tap(find.text('Forgot password?'));
+    await tester.pumpAndSettle();
+    expect(resets, ['rahul@example.com']);
+    expect(
+        find.text(
+            'If an account exists for that email, a reset link is on its way.'),
+        findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('successful sign-in on initial /auth route goes home, no crash',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      initialRoute: '/auth',
+      routes: {
+        '/': (_) => const Scaffold(body: Text('HOME-ROUTE')),
+        '/auth': (_) => AuthScreen(authOverride: FakeAuth(null)),
+      },
+    ));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Email'), 'a@b.co');
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Password'), 'secret1');
+    await tester.tap(find.text('Sign in').last);
+    await tester.pumpAndSettle();
+    expect(find.text('HOME-ROUTE'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  test('tryFromMap returns null for malformed documents', () {
+    expect(WatchlistItem.tryFromMap('x', {'metal': 'gold'}), isNull);
+    expect(
+        WatchlistItem.tryFromMap('x', {
+          'metal': 'gold',
+          'targetPrice': 'oops',
+          'addedAt': '2026-11-08T00:00:00.000'
+        }),
+        isNull);
+    expect(
+        WatchlistItem.tryFromMap('x', {
+          'metal': 'gold',
+          'targetPrice': 7000,
+          'addedAt': '2026-11-08T00:00:00.000'
+        })!
+            .targetPrice,
+        7000);
+    expect(PortfolioItem.tryFromMap('y', {'metal': 'silver'}), isNull);
+    expect(
+        PortfolioItem.tryFromMap('y', {
+          'metal': 'silver',
+          'amount': 2,
+          'avgPrice': 90,
+          'addedAt': '2026-11-08T00:00:00.000'
+        })!
+            .amount,
+        2);
+  });
 }
 
 class _SubmitSpyAuth implements AuthService {
@@ -301,6 +427,29 @@ class _SubmitSpyAuth implements AuthService {
     return const MetlyUser(uid: 'u1');
   }
 
+  @override
+  Future<void> resetPassword(String email) async {}
+
+  @override
+  Future<void> signOut() async {}
+}
+
+
+class _ResetSpyAuth implements AuthService {
+  final List<String> resets;
+  _ResetSpyAuth(this.resets);
+  @override
+  Stream<MetlyUser?> authChanges() => Stream.value(null);
+  @override
+  MetlyUser? get current => null;
+  @override
+  Future<MetlyUser> signIn(String email, String password) =>
+      throw UnimplementedError();
+  @override
+  Future<MetlyUser> signUp(String email, String password) =>
+      throw UnimplementedError();
+  @override
+  Future<void> resetPassword(String email) async => resets.add(email);
   @override
   Future<void> signOut() async {}
 }

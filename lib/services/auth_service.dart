@@ -14,6 +14,7 @@ abstract class AuthService {
   MetlyUser? get current;
   Future<MetlyUser> signIn(String email, String password);
   Future<MetlyUser> signUp(String email, String password);
+  Future<void> resetPassword(String email);
   Future<void> signOut();
 }
 
@@ -82,6 +83,18 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
+  Future<void> resetPassword(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email.trim());
+    } on fb.FirebaseAuthException catch (e) {
+      // Deliberately vague on unknown accounts: do not leak which emails
+      // are registered.
+      if (e.code == 'user-not-found' || e.code == 'invalid-email') return;
+      _throwMapped(e);
+    }
+  }
+
+  @override
   Future<void> signOut() => _auth.signOut();
 }
 
@@ -99,6 +112,9 @@ class SignedOutStubAuth implements AuthService {
       throw const AuthException('Accounts are unavailable right now.');
   @override
   Future<MetlyUser> signUp(String email, String password) =>
+      throw const AuthException('Accounts are unavailable right now.');
+  @override
+  Future<void> resetPassword(String email) =>
       throw const AuthException('Accounts are unavailable right now.');
   @override
   Future<void> signOut() async {}

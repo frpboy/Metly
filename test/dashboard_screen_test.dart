@@ -25,6 +25,8 @@ class FakeAuth implements AuthService {
   @override
   Future<MetlyUser> signUp(String email, String password) async => user!;
   @override
+  Future<void> resetPassword(String email) async {}
+  @override
   Future<void> signOut() async {}
 }
 

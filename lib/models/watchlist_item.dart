@@ -23,4 +23,14 @@ class WatchlistItem {
         targetPrice: (map['targetPrice'] as num).toDouble(),
         addedAt: DateTime.parse(map['addedAt'] as String),
       );
+
+  /// Null-tolerant parse: returns null for malformed documents so callers
+  /// can skip them instead of throwing mid-stream.
+  static WatchlistItem? tryFromMap(String id, Map<String, dynamic> map) {
+    try {
+      return WatchlistItem.fromMap(id, map);
+    } catch (_) {
+      return null;
+    }
+  }
 }

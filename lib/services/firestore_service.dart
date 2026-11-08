@@ -33,8 +33,10 @@ class FirestoreService {
   Stream<List<WatchlistItem>> watchlistStream() {
     if (uid == null) return Stream.value(const []);
     return _watchlistCol.snapshots().map((snapshot) => snapshot.docs
-        .map((doc) =>
-            WatchlistItem.fromMap(doc.id, doc.data() as Map<String, dynamic>))
+        // Skip malformed documents instead of breaking the whole stream.
+        .map((doc) => WatchlistItem.tryFromMap(
+            doc.id, doc.data() as Map<String, dynamic>))
+        .whereType<WatchlistItem>()
         .toList());
   }
 
@@ -55,8 +57,10 @@ class FirestoreService {
   Stream<List<PortfolioItem>> portfolioStream() {
     if (uid == null) return Stream.value(const []);
     return _portfolioCol.snapshots().map((snapshot) => snapshot.docs
-        .map((doc) =>
-            PortfolioItem.fromMap(doc.id, doc.data() as Map<String, dynamic>))
+        // Skip malformed documents instead of breaking the whole stream.
+        .map((doc) => PortfolioItem.tryFromMap(
+            doc.id, doc.data() as Map<String, dynamic>))
+        .whereType<PortfolioItem>()
         .toList());
   }
 

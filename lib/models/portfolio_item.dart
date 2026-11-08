@@ -28,4 +28,14 @@ class PortfolioItem {
         avgPrice: (map['avgPrice'] as num).toDouble(),
         addedAt: DateTime.parse(map['addedAt'] as String),
       );
+
+  /// Null-tolerant parse: returns null for malformed documents so callers
+  /// can skip them instead of throwing mid-stream.
+  static PortfolioItem? tryFromMap(String id, Map<String, dynamic> map) {
+    try {
+      return PortfolioItem.fromMap(id, map);
+    } catch (_) {
+      return null;
+    }
+  }
 }

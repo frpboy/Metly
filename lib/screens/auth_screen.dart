@@ -24,6 +24,8 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _busy = false;
   bool _obscure = true;
   String? _error;
+  String? _info;
+  bool _resetBusy = false;
 
   @override
   void dispose() {
@@ -43,6 +45,37 @@ class _AuthScreenState extends State<AuthScreen> {
     return null;
   }
 
+  Future<void> _forgotPassword() async {
+    final email = _email.text.trim();
+    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+      setState(() {
+        _error = 'Enter your email above, then tap "Forgot password".';
+        _info = null;
+      });
+      return;
+    }
+    setState(() {
+      _resetBusy = true;
+      _error = null;
+      _info = null;
+    });
+    try {
+      await _auth.resetPassword(email);
+      if (mounted) {
+        setState(() =>
+            _info = 'If an account exists for that email, a reset link is on its way.');
+      }
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not send the reset email. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _resetBusy = false);
+    }
+  }
+
   Future<void> _submit() async {
     final problem = _validate();
     if (problem != null) {
@@ -52,6 +85,7 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _info = null;
     });
     try {
       if (_isSignUp) {
@@ -60,8 +94,12 @@ class _AuthScreenState extends State<AuthScreen> {
         await _auth.signIn(_email.text, _password.text);
       }
       if (!mounted) return;
-      // Back to wherever the user came from (dashboard/home).
-      Navigator.of(context).pop();
+      // Return to wherever the user came from. If /auth was the initial
+      // route (deep link), there is nothing to pop: go home instead.
+      final popped = await Navigator.of(context).maybePop();
+      if (!popped && mounted) {
+        Navigator.of(context).pushReplacementNamed('/');
+      }
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
@@ -140,7 +178,24 @@ class _AuthScreenState extends State<AuthScreen> {
                       style: const TextStyle(
                           color: Colors.redAccent, fontSize: 13)),
                 ],
-                const SizedBox(height: 20),
+                if (_info != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_info!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Colors.greenAccent, fontSize: 13)),
+                ],
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: (_busy || _resetBusy) ? null : _forgotPassword,
+                    child: Text(
+                      _resetBusy ? 'Sending…' : 'Forgot password?',
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 FilledButton(
                   style: FilledButton.styleFrom(
                       backgroundColor: Cfg.gold,
@@ -163,6 +218,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       : () => setState(() {
                             _isSignUp = !_isSignUp;
                             _error = null;
+                            _info = null;
                           }),
                   child: Text(
                     _isSignUp
