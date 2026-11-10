@@ -1,0 +1,5 @@
+# Bolt's Performance Journal
+
+## 2026-11-09 - StreamBuilder Stream Recreation on Flutter Dashboard Rebuilds
+**Learning:** Calling `service.stream()` directly inside a `build()` method or instantiating services during rebuilds generates a new `Stream` instance on every frame/rebuild. In Flutter, `StreamBuilder.didUpdateWidget` compares `oldWidget.stream != widget.stream`. When the stream reference changes on routine UI updates (e.g., ticking staleness timers, filter chip toggles, or price refresh completions), `StreamBuilder` cancels its active subscription (`_unsubscribe`) and attaches a new one (`_subscribe`). Against services like Firebase Firestore, this tears down and recreates real-time snapshot listeners, wasting network connections, Firestore read quota, and CPU cycles.
+**Action:** Always memoize or cache Stream references in the `State` object across rebuilds (invalidating only when the user ID or backend service reference actually changes), and pass the stable `Stream` reference to `StreamBuilder`.

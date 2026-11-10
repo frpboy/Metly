@@ -59,6 +59,13 @@ class _DashboardScreenState extends State<DashboardScreen>
   String? aiText;
   bool sipEnabled = false;
 
+  // Memoize Firestore service and streams across rebuilds so StreamBuilder
+  // preserves its subscription rather than reconnecting on every dashboard update.
+  String? _savingsUid;
+  FirestoreService? _savingsFirestore;
+  Stream<List<WatchlistItem>>? _watchlistStream;
+  Stream<List<PortfolioItem>>? _portfolioStream;
+
   @override
   void initState() {
     super.initState();
@@ -219,16 +226,30 @@ class _DashboardScreenState extends State<DashboardScreen>
     // main() awaits the SDK's initial restored auth state before runApp.
     // Stream events trigger rebuilds, but current is the canonical snapshot.
     final user = _auth.current;
-    if (user == null) return const _SignedOutSavingsCard();
-    final firestore =
-        widget.firestoreOverride ?? FirestoreService(uid: user.uid);
+    if (user == null) {
+      _savingsUid = null;
+      _savingsFirestore = null;
+      _watchlistStream = null;
+      _portfolioStream = null;
+      return const _SignedOutSavingsCard();
+    }
+    final firestore = widget.firestoreOverride ??
+        (_savingsUid == user.uid && _savingsFirestore != null
+            ? _savingsFirestore!
+            : FirestoreService(uid: user.uid));
+    if (_savingsFirestore != firestore || _savingsUid != user.uid) {
+      _savingsFirestore = firestore;
+      _savingsUid = user.uid;
+      _watchlistStream = firestore.watchlistStream();
+      _portfolioStream = firestore.portfolioStream();
+    }
     return Column(
       key: ValueKey(user.uid),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _WatchlistSection(firestore: firestore),
+        _WatchlistSection(firestore: firestore, stream: _watchlistStream!),
         const SizedBox(height: 24),
-        _PortfolioSection(firestore: firestore),
+        _PortfolioSection(firestore: firestore, stream: _portfolioStream!),
       ],
     );
   }
@@ -372,7 +393,8 @@ class _SignedOutSavingsCard extends StatelessWidget {
 
 class _WatchlistSection extends StatelessWidget {
   final FirestoreService firestore;
-  const _WatchlistSection({required this.firestore});
+  final Stream<List<WatchlistItem>> stream;
+  const _WatchlistSection({required this.firestore, required this.stream});
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -389,7 +411,7 @@ class _WatchlistSection extends StatelessWidget {
       ]),
       const SizedBox(height: 4),
       StreamBuilder<List<WatchlistItem>>(
-        stream: firestore.watchlistStream(),
+        stream: stream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Text('Watchlist unavailable',
@@ -442,7 +464,8 @@ class _WatchlistSection extends StatelessWidget {
 
 class _PortfolioSection extends StatelessWidget {
   final FirestoreService firestore;
-  const _PortfolioSection({required this.firestore});
+  final Stream<List<PortfolioItem>> stream;
+  const _PortfolioSection({required this.firestore, required this.stream});
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -459,7 +482,7 @@ class _PortfolioSection extends StatelessWidget {
       ]),
       const SizedBox(height: 4),
       StreamBuilder<List<PortfolioItem>>(
-        stream: firestore.portfolioStream(),
+        stream: stream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Text('Portfolio unavailable',

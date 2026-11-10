@@ -58,6 +58,8 @@ class RecordingFirestore extends FirestoreService {
   final addedPortfolio = <PortfolioItem>[];
   final removedWatchlist = <String>[];
   final removedPortfolio = <String>[];
+  int watchlistStreamCalls = 0;
+  int portfolioStreamCalls = 0;
   List<WatchlistItem> watchlistItems;
   List<PortfolioItem> portfolioItems;
 
@@ -70,14 +72,21 @@ class RecordingFirestore extends FirestoreService {
   @override
   Future<void> removeWatchlistItem(String id) async => removedWatchlist.add(id);
   @override
-  Stream<List<WatchlistItem>> watchlistStream() => Stream.value(watchlistItems);
+  Stream<List<WatchlistItem>> watchlistStream() {
+    watchlistStreamCalls++;
+    return Stream.value(watchlistItems);
+  }
+
   @override
   Future<void> addPortfolioItem(PortfolioItem item) async =>
       addedPortfolio.add(item);
   @override
   Future<void> removePortfolioItem(String id) async => removedPortfolio.add(id);
   @override
-  Stream<List<PortfolioItem>> portfolioStream() => Stream.value(portfolioItems);
+  Stream<List<PortfolioItem>> portfolioStream() {
+    portfolioStreamCalls++;
+    return Stream.value(portfolioItems);
+  }
 }
 
 class FakeProvider implements PriceProvider {
@@ -158,6 +167,24 @@ void main() {
     expect(
         find.text('No watchlist items yet. Tap + to add one.'), findsOneWidget);
     expect(find.text('No holdings yet. Tap + to add one.'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('dashboard rebuild preserves savings streams without re-querying',
+      (tester) async {
+    final fs = RecordingFirestore();
+    await pumpApp(tester, auth: FakeAuth(), firestore: fs);
+    expect(fs.watchlistStreamCalls, 1);
+    expect(fs.portfolioStreamCalls, 1);
+
+    // Toggle the SIP tip chip to trigger a state update and rebuild of DashboardScreen.
+    await tester.tap(find.text('SIP Tip'));
+    await tester.pump();
+    expect(find.textContaining('SIP tip: Invest regularly'), findsOneWidget);
+
+    // Rebuild must reuse existing stream instances rather than re-invoking the stream getters.
+    expect(fs.watchlistStreamCalls, 1);
+    expect(fs.portfolioStreamCalls, 1);
     await tester.pumpWidget(const SizedBox());
   });
 
