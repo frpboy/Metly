@@ -33,6 +33,7 @@ void main() {
     )));
     await tester.pumpAndSettle();
     expect(find.text('Metly'), findsOneWidget);
+    expect(find.bySemanticsLabel('Metly logo'), findsOneWidget);
     expect(find.text('Rahul Muraleedharan · FrpBoy'), findsOneWidget);
     await tester.tap(find.text('Developer'));
     await tester.pumpAndSettle();
