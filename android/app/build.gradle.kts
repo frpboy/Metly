@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.k4nn4n.metly"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.k4nn4n.metly"
