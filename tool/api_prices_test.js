@@ -5,16 +5,16 @@ const handler = require('../api/prices.js');
 let pass=0, fail=0;
 function mkRes(){return {headers:{},code:null,body:null,
   setHeader(k,v){this.headers[k]=v},status(c){this.code=c;return this},
-  json(b){this.body=b;return this}};}
+  json(b){this.body=b;return this},end(){return this}};}
 const nowIso=()=>new Date().toISOString();
 const good=()=>({data:{gold:{buy:14000,sell:13600,gst:420,currency:'INR',unit:'gram'},
   silver:{buy:190,sell:180,gst:5.7,currency:'INR',unit:'gram'},
   timestamp:nowIso()}});
 async function run(){
-  // 1: success + normalization + edge cache header
+  // 1: success + normalization + edge cache header + defensive security headers
   global.fetch=async()=>({ok:true,status:200,json:good});
   let r=mkRes(); await handler({method:'GET'},r);
-  (r.code===200&&r.body.source==='oropocket'&&r.body.gold.sellPerGram===13600&&/s-maxage=60/.test(r.headers['cache-control']))?pass++:(fail++,console.log('t1 FAIL',r.body,r.headers));
+  (r.code===200&&r.body.source==='oropocket'&&r.body.gold.sellPerGram===13600&&/s-maxage=60/.test(r.headers['cache-control'])&&r.headers['x-content-type-options']==='nosniff'&&r.headers['x-frame-options']==='DENY'&&r.headers['referrer-policy']==='no-referrer')?pass++:(fail++,console.log('t1 FAIL',r.body,r.headers));
   // 2: cache hit within TTL serves fresh under upstream failure
   global.fetch=async()=>{throw new Error('network down')};
   r=mkRes(); await handler({method:'GET'},r);
@@ -51,9 +51,12 @@ async function run(){
   r=mkRes(); await handler({method:'GET'},r);
   (r.code===502)?pass++:(fail++,console.log('t6b FAIL',r.code,r.body));
   Date.now=realNow;
-  // 7: 405
+  // 7: 405 with security headers
   r=mkRes(); await handler({method:'POST'},r);
-  (r.code===405)?pass++:(fail++,console.log('t7 FAIL'));
+  (r.code===405&&r.headers['x-content-type-options']==='nosniff'&&r.headers['x-frame-options']==='DENY')?pass++:(fail++,console.log('t7 FAIL',r.code,r.headers));
+  // 8: OPTIONS preflight returns 204 with security headers
+  r=mkRes(); await handler({method:'OPTIONS'},r);
+  (r.code===204&&r.headers['access-control-allow-methods']==='GET,OPTIONS'&&r.headers['x-content-type-options']==='nosniff')?pass++:(fail++,console.log('t8 FAIL',r.code,r.headers));
   console.log(`api/prices.js tests: ${pass} pass, ${fail} fail`);
   process.exit(fail?1:0);
 }
