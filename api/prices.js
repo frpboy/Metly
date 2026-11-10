@@ -76,8 +76,17 @@ async function fetchUpstream() {
 }
 
 module.exports = async (req, res) => {
+  // Defensive security headers preventing MIME sniffing, framing, and referrer leakage
   res.setHeader('access-control-allow-origin', '*');
+  res.setHeader('access-control-allow-methods', 'GET,OPTIONS');
   res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('x-frame-options', 'DENY');
+  res.setHeader('referrer-policy', 'no-referrer');
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'method not allowed' });
     return;
