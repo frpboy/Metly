@@ -370,9 +370,33 @@ class _SignedOutSavingsCard extends StatelessWidget {
   }
 }
 
-class _WatchlistSection extends StatelessWidget {
+class _WatchlistSection extends StatefulWidget {
   final FirestoreService firestore;
   const _WatchlistSection({required this.firestore});
+
+  @override
+  State<_WatchlistSection> createState() => _WatchlistSectionState();
+}
+
+class _WatchlistSectionState extends State<_WatchlistSection> {
+  // Optimization: Cache stream instance to prevent StreamBuilder from tearing
+  // down and resubscribing to Firestore snapshots on every parent build.
+  late Stream<List<WatchlistItem>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = widget.firestore.watchlistStream();
+  }
+
+  @override
+  void didUpdateWidget(covariant _WatchlistSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.firestore != widget.firestore) {
+      _stream = widget.firestore.watchlistStream();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -384,12 +408,12 @@ class _WatchlistSection extends StatelessWidget {
         IconButton(
           tooltip: 'Add watchlist target',
           icon: const Icon(Icons.add_circle_outline, color: Cfg.gold),
-          onPressed: () => _showAddWatchlist(context, firestore),
+          onPressed: () => _showAddWatchlist(context, widget.firestore),
         ),
       ]),
       const SizedBox(height: 4),
       StreamBuilder<List<WatchlistItem>>(
-        stream: firestore.watchlistStream(),
+        stream: _stream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Text('Watchlist unavailable',
@@ -425,7 +449,7 @@ class _WatchlistSection extends StatelessWidget {
                   icon: const Icon(Icons.delete_outline, color: Colors.white54),
                   onPressed: () async {
                     try {
-                      await firestore.removeWatchlistItem(it.id);
+                      await widget.firestore.removeWatchlistItem(it.id);
                     } catch (_) {
                       if (context.mounted) _showSaveError(context);
                     }
@@ -440,9 +464,33 @@ class _WatchlistSection extends StatelessWidget {
   }
 }
 
-class _PortfolioSection extends StatelessWidget {
+class _PortfolioSection extends StatefulWidget {
   final FirestoreService firestore;
   const _PortfolioSection({required this.firestore});
+
+  @override
+  State<_PortfolioSection> createState() => _PortfolioSectionState();
+}
+
+class _PortfolioSectionState extends State<_PortfolioSection> {
+  // Optimization: Cache stream instance to prevent StreamBuilder from tearing
+  // down and resubscribing to Firestore snapshots on every parent build.
+  late Stream<List<PortfolioItem>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = widget.firestore.portfolioStream();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PortfolioSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.firestore != widget.firestore) {
+      _stream = widget.firestore.portfolioStream();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -454,12 +502,12 @@ class _PortfolioSection extends StatelessWidget {
         IconButton(
           tooltip: 'Add portfolio holding',
           icon: const Icon(Icons.add_circle_outline, color: Cfg.gold),
-          onPressed: () => _showAddPortfolio(context, firestore),
+          onPressed: () => _showAddPortfolio(context, widget.firestore),
         ),
       ]),
       const SizedBox(height: 4),
       StreamBuilder<List<PortfolioItem>>(
-        stream: firestore.portfolioStream(),
+        stream: _stream,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Text('Portfolio unavailable',
@@ -494,7 +542,7 @@ class _PortfolioSection extends StatelessWidget {
                   icon: const Icon(Icons.delete_outline, color: Colors.white54),
                   onPressed: () async {
                     try {
-                      await firestore.removePortfolioItem(it.id);
+                      await widget.firestore.removePortfolioItem(it.id);
                     } catch (_) {
                       if (context.mounted) _showSaveError(context);
                     }
