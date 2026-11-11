@@ -78,6 +78,9 @@ async function fetchUpstream() {
 module.exports = async (req, res) => {
   res.setHeader('access-control-allow-origin', '*');
   res.setHeader('content-type', 'application/json; charset=utf-8');
+  // Defensive security headers: prevent MIME sniffing and frame clickjacking
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('x-frame-options', 'DENY');
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'method not allowed' });
     return;
@@ -110,6 +113,8 @@ module.exports = async (req, res) => {
       return;
     }
     res.setHeader('cache-control', 'no-store');
-    res.status(502).json({ error: String(e && e.message ? e.message : e) });
+    // Prevent internal details/stack leakage: log error server-side and return generic message
+    console.error('Price upstream fetch error:', e);
+    res.status(502).json({ error: 'Upstream price service temporarily unavailable' });
   }
 };

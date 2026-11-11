@@ -11,10 +11,13 @@ const good=()=>({data:{gold:{buy:14000,sell:13600,gst:420,currency:'INR',unit:'g
   silver:{buy:190,sell:180,gst:5.7,currency:'INR',unit:'gram'},
   timestamp:nowIso()}});
 async function run(){
-  // 1: success + normalization + edge cache header
+  // 1: success + normalization + edge cache header + security headers
   global.fetch=async()=>({ok:true,status:200,json:good});
   let r=mkRes(); await handler({method:'GET'},r);
-  (r.code===200&&r.body.source==='oropocket'&&r.body.gold.sellPerGram===13600&&/s-maxage=60/.test(r.headers['cache-control']))?pass++:(fail++,console.log('t1 FAIL',r.body,r.headers));
+  (r.code===200&&r.body.source==='oropocket'&&r.body.gold.sellPerGram===13600&&
+    /s-maxage=60/.test(r.headers['cache-control'])&&
+    r.headers['x-content-type-options']==='nosniff'&&
+    r.headers['x-frame-options']==='DENY')?pass++:(fail++,console.log('t1 FAIL',r.body,r.headers));
   // 2: cache hit within TTL serves fresh under upstream failure
   global.fetch=async()=>{throw new Error('network down')};
   r=mkRes(); await handler({method:'GET'},r);
@@ -49,11 +52,11 @@ async function run(){
   // force TTL expiry by waiting is slow; instead craft: 502 case
   Date.now=()=>realNow()+31*60_000+1;
   r=mkRes(); await handler({method:'GET'},r);
-  (r.code===502)?pass++:(fail++,console.log('t6b FAIL',r.code,r.body));
+  (r.code===502&&r.body.error==='Upstream price service temporarily unavailable')?pass++:(fail++,console.log('t6b FAIL',r.code,r.body));
   Date.now=realNow;
-  // 7: 405
+  // 7: 405 (with security headers)
   r=mkRes(); await handler({method:'POST'},r);
-  (r.code===405)?pass++:(fail++,console.log('t7 FAIL'));
+  (r.code===405&&r.headers['x-content-type-options']==='nosniff'&&r.headers['x-frame-options']==='DENY')?pass++:(fail++,console.log('t7 FAIL'));
   console.log(`api/prices.js tests: ${pass} pass, ${fail} fail`);
   process.exit(fail?1:0);
 }
