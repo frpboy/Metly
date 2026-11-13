@@ -35,7 +35,16 @@ jobs:
           channel: stable
           cache: true
       - name: Install Android SDK 36 platform
-        run: yes | sdkmanager --licenses >/dev/null && sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMGR="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMGR" ]; then
+            echo "::error::Android sdkmanager is not available on PATH"
+            exit 1
+          fi
+          (yes || true) | "$SDKMGR" --licenses >/dev/null
+          "$SDKMGR" 'platforms;android-36' 'build-tools;36.0.0'
       - name: Install Flutter dependencies
         run: flutter pub get
       - name: Analyze
