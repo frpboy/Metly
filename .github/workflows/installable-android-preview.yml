@@ -1,22 +1,18 @@
-name: Metly Android installable preview
+name: Metly Android artifact qualification
 
+# Manual qualification only. No main/PR push starts an Android build, and this
+# workflow cannot create tags or releases. On this public repo, artifacts are
+# downloadable by signed-in GitHub users. No secrets/private inputs are supplied.
+# These are CI qualification outputs,
+# not installable release delivery or device/upgrade qualification.
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/installable-android-preview.yml
-      - android/**
-      - lib/**
-      - assets/**
-      - pubspec.yaml
-      - pubspec.lock
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: metly-android-preview
+  group: metly-android-qualification-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -49,6 +45,8 @@ jobs:
         run: flutter pub get
       - name: Analyze
         run: flutter analyze --no-pub
+      - name: Flutter tests
+        run: flutter test --no-pub
       - name: Determine version
         id: meta
         shell: bash
@@ -59,35 +57,44 @@ jobs:
           BUILD_NUMBER=$((100000 + GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "tag=preview-v${VERSION}-build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - name: Build installable Android APK
         run: |
           flutter build apk --release \
             --build-name="${{ steps.meta.outputs.version }}" \
             --build-number="${{ steps.meta.outputs.build_number }}"
-      - name: Prepare release assets
+      - name: Prepare qualification assets
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release-assets
           cp build/app/outputs/flutter-apk/app-release.apk \
             "release-assets/Metly-v${{ steps.meta.outputs.version }}-build-${{ steps.meta.outputs.build_number }}.apk"
+          printf '%s\n' \
+            'Metly Android qualification artifact. Not a release.' \
+            "Source: ${GITHUB_SHA}" \
+            "Ref: ${GITHUB_REF}" \
+            "Run: ${GITHUB_RUN_ID}, attempt ${GITHUB_RUN_ATTEMPT}" \
+            'Uses an ephemeral runner debug certificate, not a persistent release identity.' \
+            'Do not install over an existing app. Upgrade, device and account flows are not qualified.' \
+            'No signing key is generated for release custody or uploaded in this artifact.' \
+            > release-assets/QUALIFICATION.txt
+          flutter --version >> release-assets/QUALIFICATION.txt
           cd release-assets
           sha256sum ./*.apk > SHA256SUMS.txt
-      - name: Publish installable preview
-        uses: softprops/action-gh-release@v3
+      - name: Verify APK signature and record certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          [ -n "$SDK_ROOT" ] || { echo "::error::Android SDK root is not configured"; exit 1; }
+          "$SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs \
+            release-assets/*.apk > release-assets/SIGNING-CERTIFICATE.txt
+          cat release-assets/SIGNING-CERTIFICATE.txt
+      # Pinned actions/upload-artifact v4. No release or tag mutation.
+      - name: Upload quarantined qualification artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          name: Metly v${{ steps.meta.outputs.version }} — Installable Android preview
-          prerelease: true
-          make_latest: false
-          generate_release_notes: true
-          body: |
-            Installable Android preview built from the repository's main branch.
-
-            Signing: uses the Android debug signing identity for this preview. A later preview signed by a different runner key may require uninstalling the earlier preview first. Not a Play Store release.
-          files: |
-            release-assets/*.apk
-            release-assets/SHA256SUMS.txt
-          fail_on_unmatched_files: true
+          name: metly-android-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
