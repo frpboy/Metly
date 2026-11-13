@@ -62,6 +62,14 @@ jobs:
           flutter build apk --release \
             --build-name="${{ steps.meta.outputs.version }}" \
             --build-number="${{ steps.meta.outputs.build_number }}"
+      - name: Reject unreviewed build-time source migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Flutter can rewrite Android compatibility settings during apk build.
+          # Do not retain an artifact built after an unreviewed source change.
+          git diff --exit-code
+          git diff --cached --exit-code
       - name: Prepare qualification assets
         shell: bash
         run: |
