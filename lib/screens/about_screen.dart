@@ -124,7 +124,7 @@ class AboutScreen extends StatelessWidget {
                 fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         const Text(
-            'Proprietary license. All rights reserved.\n'
+            'Apache License 2.0\n'
             'Design & development: K4NN4N (Rahul Muraleedharan)\n'
             'Brand: Metly\n'
             'Built with Flutter and Firebase. Price data: OroPocket.',
