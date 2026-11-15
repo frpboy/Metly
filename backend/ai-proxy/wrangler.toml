@@ -1,0 +1,16 @@
+name = "metly-ai-proxy"
+main = "worker.js"
+compatibility_date = "2026-11-15"
+
+# Atomic daily budget counters. One instance per (scope, UTC day).
+[durable_objects]
+bindings = [{ name = "BUDGET", class_name = "BudgetCounter" }]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["BudgetCounter"]
+
+# Secrets (GOOGLE_AI_API_KEY) go in via `wrangler secret put` / dashboard,
+# never in this file. Optional tunables (plain env vars):
+#   PER_USER_DAILY_REQUESTS, PER_USER_DAILY_TOKENS,
+#   GLOBAL_DAILY_REQUESTS, GLOBAL_DAILY_TOKENS, CORS_ALLOW_ORIGIN
