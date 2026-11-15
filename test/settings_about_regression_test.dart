@@ -25,6 +25,8 @@ void main() {
     expect(find.textContaining('subscription'), findsNothing);
     expect(find.textContaining('Lifetime unlock'), findsNothing);
     expect(find.text('Data Source'), findsOneWidget);
+    expect(find.textContaining('billing'), findsNothing);
+    expect(find.textContaining('development only'), findsOneWidget);
     await tester.tap(find.byType(DropdownButtonFormField<AiMode>));
     await tester.pumpAndSettle();
     expect(find.text('Metly AI'), findsOneWidget);

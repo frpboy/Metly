@@ -235,8 +235,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: const Icon(Icons.save_outlined),
             label: const Text('Save')),
         const SizedBox(height: 10),
-        Text(
-            'Note: These toggles are for development only. We will wire real billing later.',
+        Text('Note: AI mode and price worker settings are for development only.',
             style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12)),
       ]),
     );
