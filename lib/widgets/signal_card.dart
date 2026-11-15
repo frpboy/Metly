@@ -122,8 +122,9 @@ class LiveSpotCard extends StatelessWidget {
         Text(
             'Indian retail rate from OroPocket (${snapshot.metal == Metal.gold ? "24K 99.9% gold" : "99.9% silver"}): '
             'the buy rate excludes 3% GST, shown separately; the sell rate is '
-            'what a seller receives. These are OroPocket\'s tradeable rates, '
-            'not jeweller or 22K rates. The high shown is the highest price '
+            'what a seller receives. These are OroPocket\'s tradeable rates'
+            '${snapshot.metal == Metal.gold ? ", not jeweller or 22K rates" : ", not jeweller rates"}. '
+            'The high shown is the highest price '
             'observed by this app since the date above, not a market historical '
             'high, so buy/wait signals are paused.',
             style: GoogleFonts.poppins(

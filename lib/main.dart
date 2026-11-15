@@ -13,7 +13,6 @@ import 'screens/about_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/feedback_screen.dart';
 import 'screens/settings_screen.dart';
-import 'screens/paywall_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,7 +50,6 @@ class MetlyApp extends StatelessWidget {
         '/about': (_) => const AboutScreen(),
         '/feedback': (_) => const FeedbackScreen(),
         '/settings': (_) => SettingsScreen(prefs: prefs),
-        '/paywall': (_) => PaywallScreen(prefs: prefs),
       },
       initialRoute: '/',
     );
