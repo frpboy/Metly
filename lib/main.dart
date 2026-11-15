@@ -8,6 +8,7 @@ import 'services/auth_bootstrap.dart';
 
 import 'config/app_config.dart';
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/about_screen.dart';
 import 'screens/auth_screen.dart';
@@ -22,6 +23,25 @@ void main() async {
   final authReady =
       await waitForInitialAuthState(metlyDefaultAuth().authChanges());
   final prefs = await SharedPreferences.getInstance();
+  // Existing users upgrading to this release are not first-run: mark
+  // onboarding complete when a Firebase account is signed in OR any legacy
+  // preference from prior use exists (AI mode/keys, proxy, entitlements).
+  const legacyKeys = [
+    Cfg.prefsKeyApi,
+    Cfg.prefsKeyModel,
+    Cfg.prefsProxyUrl,
+    Cfg.prefsProxyTok,
+    Cfg.prefsPriceWorkerUrl,
+    Cfg.entSubActive,
+    Cfg.entLifetime,
+    Cfg.prefsAiMode,
+  ];
+  final hasLegacySignal =
+      prefs.getKeys().any((k) => legacyKeys.contains(k));
+  if (prefs.getBool(OnboardingScreen.completeFlag) != true &&
+      (metlyDefaultAuth().current != null || hasLegacySignal)) {
+    await prefs.setBool(OnboardingScreen.completeFlag, true);
+  }
   runApp(MetlyApp(prefs: prefs, initialAuthReady: authReady));
 }
 
@@ -45,6 +65,7 @@ class MetlyApp extends StatelessWidget {
       theme: theme,
       routes: {
         '/': (_) => HomeScreen(prefs: prefs),
+        '/onboarding': (_) => OnboardingScreen(prefs: prefs),
         '/dashboard': (_) =>
             DashboardScreen(prefs: prefs, initialAuthReady: initialAuthReady),
         '/auth': (_) => const AuthScreen(),
@@ -53,7 +74,9 @@ class MetlyApp extends StatelessWidget {
         '/settings': (_) => SettingsScreen(prefs: prefs),
         '/paywall': (_) => PaywallScreen(prefs: prefs),
       },
-      initialRoute: '/',
+      initialRoute: prefs.getBool(OnboardingScreen.completeFlag) == true
+          ? '/'
+          : '/onboarding',
     );
   }
 }
