@@ -79,8 +79,8 @@ void main() {
     expect(event.serverName, isNull);
     expect(event.message, isNull);
     expect(event.transaction, isNull);
-    expect(event.tags, isEmpty);
-    expect(event.extra, isEmpty);
+    expect(event.tags, isNull);
+    expect(event.extra, isNull);
     expect(event.contexts.device?.name, isNull);
     expect(event.contexts.device?.model, 'Pixel 8');
 
@@ -118,4 +118,46 @@ void main() {
     expect(structuralField('x' * 200), isNull);
     expect(structuralField(null), isNull);
   });
+
+  test('fresh event carries new identity and omits uncopied fields', () {
+    final hostile = hostileEvent();
+    final out = sanitizeSentryEvent(hostile);
+    expect(out.eventId.toString(), isNot(hostile.eventId.toString()));
+    expect(out.level, hostile.level);
+    expect(out.platform, hostile.platform);
+    expect(out.threads, isNull);
+    expect(out.culprit, isNull);
+    expect(out.sdk, isNull);
+    expect(out.throwable, isNull);
+    expect(out.contexts['zz_foreign'], isNull);
+  });
+
+  test('EventOnlyTransport drops non-event items from the final envelope',
+      () async {
+    final event = SentryEvent(release: '1.0.0+1');
+    final item = await SentryEnvelopeItem.fromEvent(event);
+    final attachment = SentryAttachment.fromIntList(
+        'hello'.codeUnits, 'note.txt',
+        contentType: 'text/plain');
+    final captured = <SentryEnvelope>[];
+    final transport = EventOnlyTransport(_RecordingTransport(captured));
+    await transport.send(SentryEnvelope(
+      SentryEnvelopeHeader(event.eventId, null),
+      [SentryEnvelopeItem.fromAttachment(attachment), item],
+    ));
+    expect(captured, hasLength(1));
+    expect(captured.single.items, hasLength(1));
+    expect(captured.single.items.single.header.type, 'event');
+    expect(captured.single.items.single.header.attachmentType, isNull);
+  });
+}
+
+class _RecordingTransport implements Transport {
+  _RecordingTransport(this.sent);
+  final List<SentryEnvelope> sent;
+  @override
+  Future<SentryId?> send(SentryEnvelope envelope) async {
+    sent.add(envelope);
+    return envelope.header.eventId;
+  }
 }
