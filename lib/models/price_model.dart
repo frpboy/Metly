@@ -1,7 +1,7 @@
 import '../config/app_config.dart';
 
 /* ════════════════════════════════════════════════════════════════════════════
-   MARKET SIM + SIGNALS (mock prices for now)
+   PRICE MODEL + SIGNALS (live OroPocket data via the app /api/prices cache)
 ════════════════════════════════════════════════════════════════════════════ */
 enum Metal { gold, silver }
 
