@@ -272,4 +272,88 @@ void main() {
     expect(prefs.getBool(OnboardingScreen.completeFlag), isTrue);
     expect(exited, isTrue);
   });
+
+  testWidgets('large text scale 2.0: scroll reaches and taps every action',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(MediaQuery(
+      data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+      child: _wrap(prefs),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('onboard_begin')));
+    await tester.pumpAndSettle();
+
+    // The secondary action starts below the viewport at 2x: drag the
+    // scrollable until it is visible, prove it is hit-testable, tap through.
+    final skip = find.byKey(const Key('onboard_skip_account'));
+    await tester.scrollUntilVisible(skip, 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(skip).bottom,
+        lessThanOrEqualTo(tester.getRect(find.byType(OnboardingScreen)).bottom));
+    expect(tester.hitTestOnBinding(tester.getCenter(skip)).path, isNotEmpty);
+    await tester.tap(skip);
+    await tester.pumpAndSettle();
+    expect(find.text('Step 3 of 3'), findsOneWidget);
+
+    final finish = find.byKey(const Key('onboard_finish'));
+    await tester.scrollUntilVisible(finish, 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    expect(tester.hitTestOnBinding(tester.getCenter(finish)).path, isNotEmpty);
+  });
+
+  testWidgets('phone 360x800 + text scale 2.0 combo completes with flag',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    var exited = false;
+    await tester.pumpWidget(MediaQuery(
+      data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+      child: MaterialApp(
+        theme: ThemeData(
+          brightness: Brightness.dark,
+          colorSchemeSeed: const Color(0xFFFFD700),
+          useMaterial3: true,
+          fontFamily: 'Poppins',
+        ),
+        initialRoute: '/onboarding',
+        routes: {
+          '/onboarding': (_) => OnboardingScreen(prefs: prefs),
+          '/': (_) {
+            exited = true;
+            return const Scaffold(body: Text('HOME'));
+          },
+        },
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'combo step 1 overflow');
+
+    await tester.scrollUntilVisible(find.byKey(const Key('onboard_begin')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.byKey(const Key('onboard_begin')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'combo step 2 overflow');
+
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('onboard_skip_account')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.byKey(const Key('onboard_skip_account')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull, reason: 'combo step 3 overflow');
+
+    await tester.scrollUntilVisible(find.byKey(const Key('onboard_finish')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.byKey(const Key('onboard_finish')));
+    await tester.pumpAndSettle();
+    expect(prefs.getBool(OnboardingScreen.completeFlag), isTrue);
+    expect(exited, isTrue);
+  });
 }
