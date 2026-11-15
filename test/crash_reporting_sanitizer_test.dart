@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:metly/services/crash_reporting.dart';
+import 'package:sentry/src/transport/rate_limiter.dart';
+import 'package:sentry/src/envelope/sentry_envelope_header.dart';
+import 'package:sentry/src/envelope/sentry_item_type.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 /// Boundary proof for the fixed-generic Sentry payload, executed against
@@ -48,7 +51,6 @@ void main() {
       expect(out.exceptions?.single.type, 'AppError');
       expect(out.user, isNull);
       expect(out.request, isNull);
-            expect(out.exceptions, isNull);
       expect(out.breadcrumbs, isNull);
       expect(out.serverName, isNull);
       expect(out.tags, isNull);
@@ -69,7 +71,7 @@ void main() {
     test('transport discards a hostile envelope and sends one fixed event item',
         () async {
       final captured = <SentryEnvelope>[];
-      final transport = EventOnlyTransport(_RecordingTransport(captured));
+      final transport = EventOnlyTransport(_RecordingTransport(captured), RateLimiter(SentryOptions()));
       final hostileItem = SentryEnvelopeItem.fromEvent(hostileEvent());
       final attachment = SentryAttachment.fromIntList(
           'hostile-marker-7f3a'.codeUnits, 'note.txt',
@@ -94,7 +96,7 @@ void main() {
     });
     test('transport drops envelopes without an event item', () async {
       final captured = <SentryEnvelope>[];
-      final transport = EventOnlyTransport(_RecordingTransport(captured));
+      final transport = EventOnlyTransport(_RecordingTransport(captured), RateLimiter(SentryOptions()));
       // Empty envelope: dropped.
       await transport.send(
           SentryEnvelope(SentryEnvelopeHeader(SentryId.newId(), null), const []));

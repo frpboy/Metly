@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:sentry/src/envelope/sentry_envelope_header.dart';
+import 'package:sentry/src/envelope/sentry_item_type.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:sentry/src/transport/http_transport.dart';
 import 'package:sentry/src/transport/rate_limiter.dart';
@@ -44,7 +46,6 @@ class MetlyCrashReporting {
       options.dsn = _dsn;
       options.debug = false;
       options.tracesSampleRate = null;
-      options.profilesSampleRate = null;
       options.sendDefaultPii = false;
       options.attachScreenshot = false;
       options.attachViewHierarchy = false;
@@ -59,8 +60,9 @@ class MetlyCrashReporting {
       // Pre-setting a non-noop transport stops the SDK replacing it
       // (verified in SentryClient source); the SDK still wraps it with
       // its client-report layer.
+      final rateLimiter = RateLimiter(options);
       options.transport =
-          EventOnlyTransport(HttpTransport(options, RateLimiter(options)));
+          EventOnlyTransport(HttpTransport(options, rateLimiter), rateLimiter);
     }, appRunner: appRunner);
   }
 
@@ -82,7 +84,7 @@ SentryEvent buildGenericEvent() {
     level: SentryLevel.error,
     logger: 'app',
     message: SentryMessage('app error - details withheld by privacy boundary'),
-    exceptions: [SentryException(type: 'AppError')],
+    exceptions: [SentryException(type: 'AppError', value: null)],
     release: MetlyCrashReporting._release.isEmpty
         ? null
         : MetlyCrashReporting._release,
@@ -96,11 +98,18 @@ SentryEvent buildGenericEvent() {
 /// generic event - under a fresh header. The incoming envelope and its
 /// items are never forwarded.
 class EventOnlyTransport implements Transport {
-  EventOnlyTransport(this._inner);
+  EventOnlyTransport(this._inner, this._rateLimiter);
 
   final Transport _inner;
 
+  /// Shared with the inner HTTP transport so server-side rate limits
+  /// are checked explicitly here; the HTTP transport only UPDATES the
+  /// limiter from responses, it does not filter (verified in the
+  /// 10.4.0 source).
+  final RateLimiter _rateLimiter;
+
   static const _minInterval = Duration(minutes: 1);
+  static const _sendDeadline = Duration(seconds: 30);
   static DateTime _lastSend = DateTime.fromMillisecondsSinceEpoch(0);
   static bool _inFlight = false;
 
@@ -112,23 +121,32 @@ class EventOnlyTransport implements Transport {
     final hasEvent =
         envelope.items.any((item) => item.header.type == SentryItemType.event);
     if (!hasEvent) return envelope.header.eventId;
-    // Local rate cap: at most one send per minute, shared across
-    // instances; a burst is dropped, not queued. One send in flight at
-    // a time; the busy flag holds until the send actually completes.
-    final now = DateTime.now();
-    if (now.difference(_lastSend) < _minInterval) {
-      return envelope.header.eventId;
-    }
+    // One send in flight: busy drops instead of queueing. The flag is
+    // taken before the rate check and held across the actual awaited
+    // send below.
     if (_inFlight) return envelope.header.eventId;
     _inFlight = true;
     try {
+      // Local rate cap: at most one send per minute, shared across
+      // instances; a burst is dropped, not queued.
+      final now = DateTime.now();
+      if (now.difference(_lastSend) < _minInterval) {
+        return envelope.header.eventId;
+      }
       _lastSend = now;
       final event = buildGenericEvent();
       final item = SentryEnvelopeItem.fromEvent(event);
-      return await _inner.send(SentryEnvelope(
+      final out = SentryEnvelope(
         SentryEnvelopeHeader(event.eventId, null),
         [item],
-      ));
+      );
+      // Explicitly apply server rate limits: dropped, not sent.
+      if (_rateLimiter.filter(out) == null) return envelope.header.eventId;
+      // Bounded overall deadline: a hung send is abandoned after 30s,
+      // releasing the busy flag; the in-flight HTTP request is dropped
+      // with the connection close, never queued for retry.
+      return await _inner.send(out).timeout(_sendDeadline,
+          onTimeout: () => envelope.header.eventId);
     } finally {
       _inFlight = false;
     }
