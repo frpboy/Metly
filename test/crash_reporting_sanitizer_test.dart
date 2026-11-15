@@ -71,7 +71,7 @@ void main() {
     test('transport discards a hostile envelope and sends one fixed event item',
         () async {
       final captured = <SentryEnvelope>[];
-      final transport = EventOnlyTransport(_RecordingTransport(captured), RateLimiter(SentryOptions()));
+      final transport = EventOnlyTransport(SentryOptions(), _RecordingTransport(captured), RateLimiter(SentryOptions()));
       final hostileItem = SentryEnvelopeItem.fromEvent(hostileEvent());
       final attachment = SentryAttachment.fromIntList(
           'hostile-marker-7f3a'.codeUnits, 'note.txt',
@@ -96,7 +96,7 @@ void main() {
     });
     test('transport drops envelopes without an event item', () async {
       final captured = <SentryEnvelope>[];
-      final transport = EventOnlyTransport(_RecordingTransport(captured), RateLimiter(SentryOptions()));
+      final transport = EventOnlyTransport(SentryOptions(), _RecordingTransport(captured), RateLimiter(SentryOptions()));
       // Empty envelope: dropped.
       await transport.send(
           SentryEnvelope(SentryEnvelopeHeader(SentryId.newId(), null), const []));

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:sentry/src/envelope/sentry_envelope_header.dart';
 import 'package:sentry/src/envelope/sentry_item_type.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:sentry/src/transport/http_transport.dart';
 import 'package:sentry/src/transport/rate_limiter.dart';
 
@@ -62,7 +63,7 @@ class MetlyCrashReporting {
       // its client-report layer.
       final rateLimiter = RateLimiter(options);
       options.transport =
-          EventOnlyTransport(HttpTransport(options, rateLimiter), rateLimiter);
+          EventOnlyTransport(options, HttpTransport(options, rateLimiter), rateLimiter);
     }, appRunner: appRunner);
   }
 
@@ -98,8 +99,9 @@ SentryEvent buildGenericEvent() {
 /// generic event - under a fresh header. The incoming envelope and its
 /// items are never forwarded.
 class EventOnlyTransport implements Transport {
-  EventOnlyTransport(this._inner, this._rateLimiter);
+  EventOnlyTransport(this._options, this._inner, this._rateLimiter);
 
+  final SentryOptions _options;
   final Transport _inner;
 
   /// Shared with the inner HTTP transport so server-side rate limits
@@ -142,13 +144,43 @@ class EventOnlyTransport implements Transport {
       );
       // Explicitly apply server rate limits: dropped, not sent.
       if (_rateLimiter.filter(out) == null) return envelope.header.eventId;
-      // Bounded overall deadline: a hung send is abandoned after 30s,
-      // releasing the busy flag; the in-flight HTTP request is dropped
-      // with the connection close, never queued for retry.
-      return await _inner.send(out).timeout(_sendDeadline,
-          onTimeout: () => envelope.header.eventId);
+      // Bounded overall deadline with real cancellation: the send runs
+      // against a per-send HTTP client that is closed on timeout, which
+      // aborts the underlying connection instead of leaving it running.
+      final client = _BoundedClient(http.Client());
+      _options.httpClient = client;
+      final sendFuture = _inner.send(out);
+      // After the deadline the future is abandoned and the client is
+      // closed in finally, aborting the underlying connection; swallow
+      // the late error so nothing surfaces as unhandled.
+      sendFuture.catchError((_) => null);
+      try {
+        return await sendFuture.timeout(_sendDeadline,
+            onTimeout: () => envelope.header.eventId);
+      } finally {
+        client.close();
+      }
     } finally {
       _inFlight = false;
     }
   }
+}
+
+/// Per-send HTTP client: redirects disabled explicitly, and closing it
+/// aborts the in-flight connection (real cancellation on the send
+/// deadline, not just an abandoned future).
+class _BoundedClient extends http.BaseClient {
+  _BoundedClient(this._inner);
+
+  final http.Client _inner;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    request.followRedirects = false;
+    request.maxRedirects = 0;
+    return _inner.send(request);
+  }
+
+  @override
+  void close() => _inner.close();
 }
