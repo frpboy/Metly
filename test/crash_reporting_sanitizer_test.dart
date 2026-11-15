@@ -12,8 +12,8 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 void main() {
   final hostileStrings = [
     'rahul.muraleedharan@example.com',
-    'https://example.com/private/path?token=abc123',
-    'Authorization: Bearer xyz',
+    'https://example.com/private/path?token=FIXTURE-NOT-A-SECRET',
+    'Authorization: Bearer FIXTURE-NOT-A-SECRET',
     '/sdcard/Download/secret-file.txt',
     'user-supplied free text title',
     '192.168.10.77',
@@ -23,15 +23,15 @@ void main() {
   SentryEvent hostileEvent() => SentryEvent(
         level: SentryLevel.fatal,
         logger: 'hostile-marker-7f3a',
-        release: 'https://example.com/private/path?token=abc123',
-        dist: 'Authorization: Bearer xyz',
+        release: 'https://example.com/private/path?token=FIXTURE-NOT-A-SECRET',
+        dist: 'Authorization: Bearer FIXTURE-NOT-A-SECRET',
         environment: 'user-supplied free text title',
         serverName: '192.168.10.77',
         user: SentryUser(email: 'rahul.muraleedharan@example.com'),
-        request: SentryRequest(url: 'https://example.com/private/path?token=abc123'),
+        request: SentryRequest(url: 'https://example.com/private/path?token=FIXTURE-NOT-A-SECRET'),
         breadcrumbs: [Breadcrumb(message: 'user-supplied free text title')],
         tags: const {'k': 'hostile-marker-7f3a'},
-        extra: const {'k': 'Authorization: Bearer xyz'},
+        extra: const {'k': 'Authorization: Bearer FIXTURE-NOT-A-SECRET'},
         contexts: Contexts(
           device: SentryDevice(name: "rahul's personal phone", model: 'hostile-marker-7f3a'),
         ),
@@ -43,10 +43,12 @@ void main() {
       expect(out.level, SentryLevel.error);
       expect(out.logger, 'app');
       expect(out.environment, 'production');
+      expect(out.message?.formatted,
+          'app error - details withheld by privacy boundary');
+      expect(out.exceptions?.single.type, 'AppError');
       expect(out.user, isNull);
       expect(out.request, isNull);
-      expect(out.message, isNull);
-      expect(out.exceptions, isNull);
+            expect(out.exceptions, isNull);
       expect(out.breadcrumbs, isNull);
       expect(out.serverName, isNull);
       expect(out.tags, isNull);
@@ -89,6 +91,21 @@ void main() {
         expect(text.contains(hostile), isFalse,
             reason: 'envelope leaked: $hostile');
       }
+    });
+    test('transport drops envelopes without an event item', () async {
+      final captured = <SentryEnvelope>[];
+      final transport = EventOnlyTransport(_RecordingTransport(captured));
+      // Empty envelope: dropped.
+      await transport.send(
+          SentryEnvelope(SentryEnvelopeHeader(SentryId.newId(), null), const []));
+      // Attachment-only envelope: dropped, never converted into an error.
+      final attachment = SentryAttachment.fromIntList('x'.codeUnits, 'a.txt',
+          contentType: 'text/plain');
+      await transport.send(SentryEnvelope(
+        SentryEnvelopeHeader(SentryId.newId(), null),
+        [SentryEnvelopeItem.fromAttachment(attachment)],
+      ));
+      expect(captured, isEmpty);
     });
   });
 }

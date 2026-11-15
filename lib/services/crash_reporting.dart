@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:sentry_flutter/sentry_flutter.dart';
-import 'package:sentry_flutter/src/transport/http_transport.dart';
-import 'package:sentry_flutter/src/transport/rate_limiter.dart';
+import 'package:sentry/src/transport/http_transport.dart';
+import 'package:sentry/src/transport/rate_limiter.dart';
 
 /// Minimal automatic crash/error reporting for Metly.
 ///
@@ -81,6 +81,8 @@ SentryEvent buildGenericEvent() {
     timestamp: DateTime.now().toUtc(),
     level: SentryLevel.error,
     logger: 'app',
+    message: SentryMessage('app error - details withheld by privacy boundary'),
+    exceptions: [SentryException(type: 'AppError')],
     release: MetlyCrashReporting._release.isEmpty
         ? null
         : MetlyCrashReporting._release,
@@ -98,13 +100,37 @@ class EventOnlyTransport implements Transport {
 
   final Transport _inner;
 
+  static const _minInterval = Duration(minutes: 1);
+  static DateTime _lastSend = DateTime.fromMillisecondsSinceEpoch(0);
+  static bool _inFlight = false;
+
   @override
   Future<SentryId?> send(SentryEnvelope envelope) async {
-    final event = buildGenericEvent();
-    final item = SentryEnvelopeItem.fromEvent(event);
-    return _inner.send(SentryEnvelope(
-      SentryEnvelopeHeader(event.eventId, null),
-      [item],
-    ));
+    // Gate: only an envelope carrying an error/crash event item is
+    // worth reporting. Session, client-report, transaction, log-only
+    // or empty envelopes are dropped, never converted into an error.
+    final hasEvent =
+        envelope.items.any((item) => item.header.type == SentryItemType.event);
+    if (!hasEvent) return envelope.header.eventId;
+    // Local rate cap: at most one send per minute, shared across
+    // instances; a burst is dropped, not queued. One send in flight at
+    // a time; the busy flag holds until the send actually completes.
+    final now = DateTime.now();
+    if (now.difference(_lastSend) < _minInterval) {
+      return envelope.header.eventId;
+    }
+    if (_inFlight) return envelope.header.eventId;
+    _inFlight = true;
+    try {
+      _lastSend = now;
+      final event = buildGenericEvent();
+      final item = SentryEnvelopeItem.fromEvent(event);
+      return await _inner.send(SentryEnvelope(
+        SentryEnvelopeHeader(event.eventId, null),
+        [item],
+      ));
+    } finally {
+      _inFlight = false;
+    }
   }
 }
