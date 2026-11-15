@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:metly/screens/about_screen.dart';
 import 'package:metly/screens/settings_screen.dart';
+import 'package:metly/config/app_config.dart';
 
 void main() {
   setUp(() { GoogleFonts.config.allowRuntimeFetching = false; });
@@ -18,8 +19,17 @@ void main() {
       routes: {'/about': (_) => const Scaffold()},
     ));
     await tester.pumpAndSettle();
-    await expectLater(
-        find.byType(SettingsScreen), matchesGoldenFile('tmp_settings.png'));
+    expect(find.text('Entitlements (dev stubs)'), findsNothing);
+    expect(find.textContaining('₹99'), findsNothing);
+    expect(find.textContaining('₹999'), findsNothing);
+    expect(find.textContaining('subscription'), findsNothing);
+    expect(find.textContaining('Lifetime unlock'), findsNothing);
+    expect(find.text('Data Source'), findsOneWidget);
+    await tester.tap(find.byType(DropdownButtonFormField<AiMode>));
+    await tester.pumpAndSettle();
+    expect(find.text('Metly AI'), findsOneWidget);
+    expect(find.text('Use My API'), findsOneWidget);
+    expect(find.textContaining('₹'), findsNothing);
   });
   testWidgets('about golden', (tester) async {
     tester.view.physicalSize = const Size(390, 1400);
@@ -27,7 +37,8 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(const MaterialApp(home: AboutScreen()));
     await tester.pumpAndSettle();
-    await expectLater(
-        find.byType(AboutScreen), matchesGoldenFile('tmp_about.png'));
+    expect(find.textContaining('Proprietary'), findsNothing);
+    expect(find.textContaining('Apache License 2.0.'), findsOneWidget);
+    expect(find.text('© 2026 K4NN4N'), findsOneWidget);
   });
 }
