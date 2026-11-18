@@ -1,7 +1,7 @@
 Metly tracks live gold and silver spot prices and turns them into clear Buy or Wait signals, tuned for Indian buyers and festive purchase windows.
 
 Features:
-- Live price tracking: real spot prices for gold and silver, fetched from a public price API.
+- Live price tracking: real Indian 24K gold and 99.9% silver buy/sell rates (INR, GST shown separately) via a free public price API.
 - Smart signals: Buy or Wait recommendations based on price trends and festive windows (Dhanteras, Diwali).
 - Watchlist and portfolio: follow the metals you care about and record your holdings.
 - AI insights: ask for explanations of market moves and signal rationale. Choose Metly AI (hosted proxy) or use your own OpenRouter API key, or turn AI off entirely.
