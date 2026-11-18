@@ -1,0 +1,14 @@
+Metly tracks live gold and silver spot prices and turns them into clear Buy or Wait signals, tuned for Indian buyers and festive purchase windows.
+
+Features:
+- Live price tracking: real spot prices for gold and silver, fetched from a public price API.
+- Smart signals: Buy or Wait recommendations based on price trends and festive windows (Dhanteras, Diwali).
+- Watchlist and portfolio: follow the metals you care about and record your holdings.
+- AI insights: ask for explanations of market moves and signal rationale. Choose Metly AI (hosted proxy) or use your own OpenRouter API key, or turn AI off entirely.
+- Premium dark UI with gold and silver accents.
+- Made in India.
+
+Data and privacy:
+- Sign in with email and password (optional features use cloud sync for your watchlist and portfolio).
+- AI is optional. In "Use My API" mode your OpenRouter key stays on your device.
+- No ads. No tracking SDKs.
