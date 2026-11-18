@@ -35,7 +35,10 @@ jobs:
           channel: stable
           cache: true
       - name: Install Android SDK 36 platform
-        run: yes | sdkmanager --licenses >/dev/null && sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
       - name: Install Flutter dependencies
         run: flutter pub get
       - name: Analyze
