@@ -26,11 +26,13 @@ confirmation before submission. Nothing here has been entered into Play Console.
   a seamless upgrade. Signing enrollment decision itself stays held.
 
 ## Data safety (grounded in code + live console)
-- Email address - COLLECTED: email+password sign-in via Firebase Auth
-  (lib/screens/auth_screen.dart, lib/services/auth_service.dart; console shows
-  Email/Password provider ENABLED). Purpose: account management.
-  [OWNER CONFIRM: whether sign-in is mandatory or optional for core price
-  viewing - affects the "required vs optional" answer.]
+- Email address - COLLECTED, OPTIONAL: sign-in is not required for core
+  price viewing. HomeScreen is a welcome page; DashboardScreen shows live
+  prices to signed-out users and gates only the watchlist/portfolio section
+  behind "Sign in / Create account" (lib/screens/home_screen.dart,
+  lib/screens/dashboard_screen.dart; Email/Password provider ENABLED in
+  console). Purpose: account management / watchlist-portfolio sync.
+  Data-safety answer: email collected, optional, not shared.
 - Watchlist and portfolio entries - COLLECTED, stored per-user in Cloud
   Firestore users/{uid}/watchlist and users/{uid}/portfolio
   (lib/services/firestore_service.dart). Purpose: app functionality.
@@ -51,11 +53,28 @@ confirmation before submission. Nothing here has been entered into Play Console.
   GST separate, stale:false). No personal data sent for prices.
 - Encryption in transit: HTTPS throughout (dio; Firebase SDKs).
 - Privacy policy URL: https://metly.frpboy.in/privacy (live, verified
-  2026-11-18) - from the existing project-sites legal work.
+  2026-11-18). CONTENT RECONCILED against the qualified shipping flows:
+  prices via Vercel/OroPocket with ~1 min cache and GST shown separately
+  (matches code), per-user watchlist/portfolio with owner-only Firestore
+  rules (matches firestore.rules), AI Off/Metly AI/Use-My-API modes (matches
+  app_config), no payments (matches the free-app decision).
+  ONE MISMATCH: the page says sign-in is "Firebase Authentication (Google)",
+  but the shipping code and console enable Email/Password, not Google
+  sign-in. The page (or the app) must be corrected before submission - sites
+  owner (J9) to fix the page unless Rahul wants Google sign-in added.
 
-## Content rating / audience
-- Finance app, no gambling or simulated gambling visible in code.
-  [OWNER CONFIRM via the Play IARC questionnaire.]
+## Content rating / audience (factual answers proposed from actual app
+## content; Rahul's review needed only for the certifications and final
+## intended-audience call)
+- Category: Finance. No gambling or simulated gambling anywhere in code.
+- No user-to-user sharing or user-generated public content (feedback goes
+  privately to the developer only).
+- No in-app purchases, no ads (free app; "Remove the paid options" decision,
+  and no billing SDK in pubspec.yaml).
+- AI chat: user text can be sent to an AI provider when AI is enabled
+  (off by choice). IARC "user interaction" items should reflect that.
+- Intended audience: general/finance; 18+ is the conservative answer -
+  [OWNER CERTIFICATION: final audience + IARC certifications are Rahul's.]
 
 ## F-Droid status (officially grounded; decision held)
 - F-Droid Inclusion Policy (f-droid.org/en/docs/Inclusion_Policy, fetched
