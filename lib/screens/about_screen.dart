@@ -124,7 +124,7 @@ class AboutScreen extends StatelessWidget {
                 fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         const Text(
-            'Apache License 2.0\n'
+            'Apache License 2.0.\n'
             'Design & development: K4NN4N (Rahul Muraleedharan)\n'
             'Brand: Metly\n'
             'Built with Flutter and Firebase. Price data: OroPocket.',
@@ -137,7 +137,7 @@ class AboutScreen extends StatelessWidget {
             Icons.gavel_outlined),
         const SizedBox(height: 16),
         const Center(
-            child: Text('© 2025 K4NN4N',
+            child: Text('© 2026 K4NN4N',
                 style: TextStyle(color: Colors.white54, fontSize: 12))),
       ]),
     );

@@ -91,7 +91,7 @@ class MetlyDrawer extends StatelessWidget {
         const Spacer(),
         Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text('© 2025 K4NN4N',
+            child: Text('© 2026 K4NN4N',
                 style:
                     GoogleFonts.poppins(color: Colors.white54, fontSize: 12))),
       ])),
