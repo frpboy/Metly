@@ -11,6 +11,11 @@ on:
       - pubspec.yaml
       - pubspec.lock
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish a public GitHub prerelease of this build. Default false: build, analyze and test only, nothing published.'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -43,6 +48,8 @@ jobs:
         run: flutter pub get
       - name: Analyze
         run: flutter analyze --no-pub
+      - name: Unit tests
+        run: flutter test
       - name: Determine version
         id: meta
         shell: bash
@@ -69,9 +76,10 @@ jobs:
           cd release-assets
           sha256sum ./*.apk > SHA256SUMS.txt
       - name: Publish installable preview
-        # Only automatic main pushes publish a prerelease. workflow_dispatch runs
-        # (e.g. branch qualification) build and verify but never publish.
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # Publication is deliberate only: an explicit workflow_dispatch with
+        # publish=true. Pushes to main build, analyze and test but never publish,
+        # so an unqualified or stale artifact can never reach public releases.
+        if: github.event_name == 'workflow_dispatch' && inputs.publish == true
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
