@@ -35,7 +35,7 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null
           "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
-      - name: Write upload keystore (required: store qualification fails closed)
+      - name: "Write upload keystore (required - store qualification fails closed)"
         env:
           METLY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.METLY_UPLOAD_KEYSTORE_BASE64 }}
           METLY_UPLOAD_STORE_PASSWORD: ${{ secrets.METLY_UPLOAD_STORE_PASSWORD }}
@@ -84,7 +84,7 @@ jobs:
           unzip -l "$AAB" | grep -q 'base/dex/'
           unzip -l "$AAB" | grep -q 'BundleConfig.pb'
           echo "AAB structure OK"
-      - name: Verify signing identity (fail closed on missing or mismatched upload cert)
+      - name: "Verify signing identity (fail closed on missing or mismatched upload cert)"
         shell: bash
         run: |
           set -euo pipefail
@@ -111,7 +111,7 @@ jobs:
             exit 1
           fi
           echo "Signed with pinned upload certificate SHA-256: $EXPECTED"
-      - name: Guard: never upload signed AAB as a public artifact
+      - name: "Guard - never upload signed AAB as a public artifact"
         env:
           METLY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.METLY_UPLOAD_KEYSTORE_BASE64 }}
         shell: bash
