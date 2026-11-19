@@ -21,8 +21,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _proxyUrlCtrl;
   late final TextEditingController _proxyTokCtrl;
   late final TextEditingController _priceWorkerUrlCtrl;
-  bool _subActive = false;
-  bool _lifeActive = false;
 
   // Grouped model options
   final Map<String, Map<String, String>> modelGroups = {
@@ -56,8 +54,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         text: widget.prefs.getString(Cfg.prefsProxyTok) ?? '');
     _priceWorkerUrlCtrl = TextEditingController(
         text: widget.prefs.getString(Cfg.prefsPriceWorkerUrl) ?? '');
-    _subActive = widget.prefs.getBool(Cfg.entSubActive) ?? false;
-    _lifeActive = widget.prefs.getBool(Cfg.entLifetime) ?? false;
   }
 
   @override
@@ -79,8 +75,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Custom price workers are disabled in this release; reset any legacy
     // saved URL rather than keep trusting it.
     await widget.prefs.remove(Cfg.prefsPriceWorkerUrl);
-    await widget.prefs.setBool(Cfg.entSubActive, _subActive);
-    await widget.prefs.setBool(Cfg.entLifetime, _lifeActive);
     if (!mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('Settings saved')));
@@ -206,25 +200,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 16),
         const Divider(color: Colors.white12),
         const SizedBox(height: 12),
-        Text('Entitlements (dev stubs)',
-            style: GoogleFonts.poppins(
-                fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        SwitchListTile(
-            value: _subActive,
-            activeThumbColor: Cfg.gold,
-            title: const Text('Metly AI subscription • ${Cfg.priceMonthly}'),
-            subtitle: const Text('Enables Metly AI mode'),
-            onChanged: (v) => setState(() => _subActive = v)),
-        SwitchListTile(
-            value: _lifeActive,
-            activeThumbColor: Cfg.gold,
-            title: const Text('Lifetime unlock • ${Cfg.priceLifetime}'),
-            subtitle: const Text('Enables “Use My API” mode'),
-            onChanged: (v) => setState(() => _lifeActive = v)),
-        const SizedBox(height: 16),
-        const Divider(color: Colors.white12),
-        const SizedBox(height: 12),
         Text('Data Source',
             style: GoogleFonts.poppins(
                 fontSize: 16, color: Cfg.gold, fontWeight: FontWeight.w700)),
@@ -260,8 +235,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: const Icon(Icons.save_outlined),
             label: const Text('Save')),
         const SizedBox(height: 10),
-        Text(
-            'Note: These toggles are for development only. We will wire real billing later.',
+        Text('Note: AI mode and price worker settings are for development only.',
             style: GoogleFonts.poppins(color: Colors.white54, fontSize: 12)),
       ]),
     );

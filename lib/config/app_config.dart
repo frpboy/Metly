@@ -25,19 +25,9 @@ class Cfg {
   static const String prefsProxyTok = 'proxy_token';
   static const String prefsPriceWorkerUrl = 'price_worker_url';
 
-  // Entitlements (dev stubs for pricing)
-  // ₹99/mo for Metly AI (creator’s API)
-  static const String entSubActive = 'ent_sub_active';
-  // ₹999 lifetime for using customer’s own API
-  static const String entLifetime = 'ent_lifetime_active';
-
   // AI Mode selection
   static const String prefsAiMode =
       'ai_mode'; // 0=Off, 1=Metly AI, 2=Use My API
-
-  // UI labels
-  static const String priceMonthly = '₹99/month';
-  static const String priceLifetime = '₹999 (lifetime)';
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -48,8 +38,8 @@ enum AiMode { off, metlyCloud, userApi }
 extension AiModeX on AiMode {
   String get label => switch (this) {
         AiMode.off => 'Off',
-        AiMode.metlyCloud => 'Metly AI (${Cfg.priceMonthly})',
-        AiMode.userApi => 'Use My API (${Cfg.priceLifetime})',
+        AiMode.metlyCloud => 'Metly AI',
+        AiMode.userApi => 'Use My API',
       };
   int get idx => switch (this) {
         AiMode.off => 0,

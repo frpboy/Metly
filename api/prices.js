@@ -15,27 +15,21 @@
  *   }
  * On upstream failure with a cached value: same shape with stale: true and
  * the original asOf, so clients can apply their own freshness rules.
- * On upstream failure with no cache: 502 { error }.
+ * On upstream failure with no cache: 502 with a generic error.
  *
- * Semantics preserved from the provider (verified against their docs and
- * live responses): buy/sell are INR per gram for 24K 99.9% gold and 99.9%
- * silver; buy EXCLUDES GST; gstPerGram is exactly 3% of buy.
+ * Semantics preserved from the provider: buy/sell are INR per gram for 24K
+ * 99.9% gold and 99.9% silver; buy EXCLUDES GST; gstPerGram is exactly 3% of buy.
  */
 
 const UPSTREAM = 'https://api.oropocket.com/public/prices';
-const TTL_MS = 60_000;          // provider refreshes ~2-2.5 min; never poll faster
+const TTL_MS = 60_000;
 const TIMEOUT_MS = 8_000;
-const MAX_CACHE_AGE_MS = 30 * 60_000; // never serve a QUOTE older than 30 min (by its asOf)
-// Browsers revalidate quickly; the Vercel edge cache absorbs concurrent
-// visitors across instances so upstream quota (10 req/min/IP) is preserved.
+const MAX_CACHE_AGE_MS = 30 * 60_000;
 const EDGE_CACHE = 'public, max-age=30, s-maxage=60, stale-while-revalidate=180';
 
-let cache = null; // { payload, fetchedAtMs }
-let inflight = null; // coalesces concurrent cold misses to ONE upstream call
+let cache = null;
+let inflight = null;
 
-// Contract enforcement: the provider documents currency/unit as "always INR
-// and gram today - do not hardcode the assumption", so anything else (or a
-// missing field) is rejected rather than silently mislabelled.
 function isValidQuote(d) {
   const ok = (m) =>
     m && Number.isFinite(m.buy) && m.buy > 0 &&
@@ -77,17 +71,30 @@ async function fetchUpstream() {
 
 module.exports = async (req, res) => {
   res.setHeader('access-control-allow-origin', '*');
+  res.setHeader('access-control-allow-methods', 'GET, OPTIONS');
   res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('x-frame-options', 'DENY');
+
+  if (req.method === 'OPTIONS') {
+    res.setHeader('access-control-allow-headers', 'content-type');
+    res.status(204).end?.() || res.status(204).json({});
+    return;
+  }
+
   if (req.method !== 'GET') {
+    res.setHeader('allow', 'GET, OPTIONS');
     res.status(405).json({ error: 'method not allowed' });
     return;
   }
+
   const now = Date.now();
   if (cache && now - cache.fetchedAtMs < TTL_MS) {
     res.setHeader('cache-control', EDGE_CACHE);
     res.status(200).json(cache.payload);
     return;
   }
+
   try {
     if (!inflight) {
       inflight = fetchUpstream().then((payload) => {
@@ -101,8 +108,6 @@ module.exports = async (req, res) => {
     res.setHeader('cache-control', EDGE_CACHE);
     res.status(200).json(payload);
   } catch (e) {
-    // Stale-serving is bounded by the QUOTE's own age (asOf), not by when we
-    // happened to fetch it: an already-old quote never gets a fresh 30 min.
     const quoteAge = cache ? now - Date.parse(cache.payload.asOf) : Infinity;
     if (cache && quoteAge < MAX_CACHE_AGE_MS) {
       res.setHeader('cache-control', 'no-store');
@@ -110,6 +115,7 @@ module.exports = async (req, res) => {
       return;
     }
     res.setHeader('cache-control', 'no-store');
-    res.status(502).json({ error: String(e && e.message ? e.message : e) });
+    console.error('Price upstream fetch error:', e);
+    res.status(502).json({ error: 'Upstream price service temporarily unavailable' });
   }
 };

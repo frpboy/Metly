@@ -1,0 +1,1 @@
+Gold and silver price tracker with smart Buy/Wait signals
