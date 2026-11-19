@@ -1,7 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Optional upload-keystore signing: present only on CI/release machines via
+// key.properties (gitignored). Preview builds without it fall back to the
+// runner debug key and stay non-store-uploadable.
+val uploadKeystorePropertiesFile = rootProject.file("key.properties")
+val uploadKeystoreProperties = Properties().apply {
+    if (uploadKeystorePropertiesFile.exists()) {
+        uploadKeystorePropertiesFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -27,11 +39,26 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("upload") {
+            if (uploadKeystorePropertiesFile.exists()) {
+                storeFile = uploadKeystoreProperties["storeFile"]?.let { rootProject.file(it as String) }
+                storePassword = uploadKeystoreProperties["storePassword"] as String?
+                keyAlias = uploadKeystoreProperties["keyAlias"] as String?
+                keyPassword = uploadKeystoreProperties["keyPassword"] as String?
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Preview builds use the runner debug key; configure a persistent
-            // private upload keystore before producing stable signed releases.
-            signingConfig = signingConfigs.getByName("debug")
+            // Signed store-uploadable build when key.properties exists;
+            // otherwise preview builds keep the runner debug key.
+            signingConfig = if (uploadKeystorePropertiesFile.exists()) {
+                signingConfigs.getByName("upload")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
