@@ -1,10 +1,10 @@
-name: Release AAB qualification (debug-key, not store-uploadable)
+name: Release AAB qualification
 
 on:
   workflow_dispatch:
     inputs:
       upload_artifact:
-        description: 'Upload the AAB as a workflow artifact (visible to any logged-in GitHub user on this public repo). Default false: qualify from logs only.'
+        description: 'Upload the AAB as a workflow artifact (visible to any logged-in GitHub user on this public repo). Default false: qualify from logs only. Never enable for signed builds.'
         type: boolean
         default: false
 
@@ -35,6 +35,26 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null
           "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Write upload keystore (when signing secrets exist)
+        env:
+          METLY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.METLY_UPLOAD_KEYSTORE_BASE64 }}
+          METLY_UPLOAD_STORE_PASSWORD: ${{ secrets.METLY_UPLOAD_STORE_PASSWORD }}
+          METLY_UPLOAD_KEY_ALIAS: ${{ secrets.METLY_UPLOAD_KEY_ALIAS }}
+          METLY_UPLOAD_KEY_PASSWORD: ${{ secrets.METLY_UPLOAD_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$METLY_UPLOAD_KEYSTORE_BASE64" ]; then
+            echo "No upload keystore secret: preview build stays debug-signed."
+            exit 0
+          fi
+          echo "$METLY_UPLOAD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/metly-upload.keystore"
+          {
+            echo "storeFile=$RUNNER_TEMP/metly-upload.keystore"
+            echo "storePassword=$METLY_UPLOAD_STORE_PASSWORD"
+            echo "keyAlias=$METLY_UPLOAD_KEY_ALIAS"
+            echo "keyPassword=$METLY_UPLOAD_KEY_PASSWORD"
+          } > android/key.properties
+          echo "Upload keystore written for signed build."
       - name: Install Flutter dependencies
         run: flutter pub get
       - name: Analyze
@@ -64,6 +84,22 @@ jobs:
           unzip -l "$AAB" | grep -q 'base/dex/'
           unzip -l "$AAB" | grep -q 'BundleConfig.pb'
           echo "AAB structure OK"
+      - name: Verify signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$AAB"
+      - name: Guard: never upload signed AAB as a public artifact
+        env:
+          METLY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.METLY_UPLOAD_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.upload_artifact }}" = "true" ] && [ -n "$METLY_UPLOAD_KEYSTORE_BASE64" ]; then
+            echo "Refusing to upload a signed AAB as a public artifact."
+            exit 1
+          fi
       - name: Hash and upload artifact
         if: inputs.upload_artifact == true
         uses: actions/upload-artifact@v4
