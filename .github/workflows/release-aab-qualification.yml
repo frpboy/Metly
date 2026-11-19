@@ -1,10 +1,10 @@
-name: Release AAB qualification
+name: Release AAB store qualification (upload-signed, fails closed)
 
 on:
   workflow_dispatch:
     inputs:
       upload_artifact:
-        description: 'Upload the AAB as a workflow artifact (visible to any logged-in GitHub user on this public repo). Default false: qualify from logs only. Never enable for signed builds.'
+        description: 'Blocked: this lane always produces a signed store AAB, and artifacts are visible to any logged-in GitHub user on this public repo. Kept for explicit refusal only.'
         type: boolean
         default: false
 
@@ -35,7 +35,7 @@ jobs:
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null
           "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
-      - name: Write upload keystore (when signing secrets exist)
+      - name: Write upload keystore (required: store qualification fails closed)
         env:
           METLY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.METLY_UPLOAD_KEYSTORE_BASE64 }}
           METLY_UPLOAD_STORE_PASSWORD: ${{ secrets.METLY_UPLOAD_STORE_PASSWORD }}
@@ -44,8 +44,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$METLY_UPLOAD_KEYSTORE_BASE64" ]; then
-            echo "No upload keystore secret: preview build stays debug-signed."
-            exit 0
+            echo "::error::Upload keystore secrets are missing. This lane is store qualification and must produce a build signed with the pinned upload certificate; refusing to pass unsigned/debug-signed output."
+            exit 1
           fi
           echo "$METLY_UPLOAD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/metly-upload.keystore"
           {
@@ -84,12 +84,27 @@ jobs:
           unzip -l "$AAB" | grep -q 'base/dex/'
           unzip -l "$AAB" | grep -q 'BundleConfig.pb'
           echo "AAB structure OK"
-      - name: Verify signing identity
+      - name: Verify signing identity (fail closed on missing or mismatched upload cert)
         shell: bash
         run: |
           set -euo pipefail
           AAB=build/app/outputs/bundle/release/app-release.aab
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$AAB"
+          # AABs are JAR-signed: verify with jarsigner, not apksigner.
+          if ! jarsigner -verify -verbose -certs "$AAB" > /tmp/jarsigner-out.txt 2>&1; then
+            cat /tmp/jarsigner-out.txt
+            echo "::error::AAB JAR signature verification failed."
+            exit 1
+          fi
+          # Pinned upload-certificate SHA-256, recovered with keytool from the
+          # actual keystore (2026-11-19, alias metly-upload). The artifact's
+          # signer certificate must match this exact value.
+          EXPECTED="54:B9:B0:B3:C5:1D:1D:BD:27:0C:35:DF:32:2B:0E:80:76:91:6B:25:EE:CA:36:62:AA:56:19:BE:8B:CB:35:54"
+          if ! grep -Fq "$EXPECTED" /tmp/jarsigner-out.txt; then
+            echo "::error::Signer certificate does not match the pinned upload certificate SHA-256."
+            grep -E 'SHA-256' /tmp/jarsigner-out.txt | head -5
+            exit 1
+          fi
+          echo "Signed with pinned upload certificate SHA-256: $EXPECTED"
       - name: Guard: never upload signed AAB as a public artifact
         env:
           METLY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.METLY_UPLOAD_KEYSTORE_BASE64 }}
