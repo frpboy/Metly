@@ -40,16 +40,22 @@ jobs:
           channel: stable
           cache: true
       - name: Install Android SDK 36 platform
+        shell: bash
         run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses >/dev/null
-          "$SDKMANAGER" 'platforms;android-36' 'build-tools;36.0.0'
+          set -euo pipefail
+          SDKMGR="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMGR" ]; then
+            SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          [ -x "$SDKMGR" ] || { echo "::error::Android sdkmanager is not available"; exit 1; }
+          (yes || true) | "$SDKMGR" --licenses >/dev/null
+          "$SDKMGR" 'platforms;android-36' 'build-tools;36.0.0'
       - name: Install Flutter dependencies
         run: flutter pub get
       - name: Analyze
         run: flutter analyze --no-pub
       - name: Unit tests
-        run: flutter test
+        run: flutter test --no-pub
       - name: Determine version
         id: meta
         shell: bash
@@ -66,6 +72,14 @@ jobs:
           flutter build apk --release \
             --build-name="${{ steps.meta.outputs.version }}" \
             --build-number="${{ steps.meta.outputs.build_number }}"
+      - name: Reject unreviewed build-time source migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Flutter can rewrite Android compatibility settings during apk build.
+          # Do not retain an artifact built after an unreviewed source change.
+          git diff --exit-code
+          git diff --cached --exit-code
       - name: Prepare release assets
         shell: bash
         run: |
@@ -75,6 +89,20 @@ jobs:
             "release-assets/Metly-v${{ steps.meta.outputs.version }}-build-${{ steps.meta.outputs.build_number }}.apk"
           cd release-assets
           sha256sum ./*.apk > SHA256SUMS.txt
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          [ -n "$SDK_ROOT" ] || { echo "::error::Android SDK root is not configured"; exit 1; }
+          "$SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs \
+            ./*.apk > SIGNING-CERTIFICATE.txt
+          cat SIGNING-CERTIFICATE.txt
+          printf '%s\n' \
+            'Metly Android installable preview. Not a Play Store release.' \
+            "Source: ${GITHUB_SHA}" \
+            "Ref: ${GITHUB_REF}" \
+            "Run: ${GITHUB_RUN_ID}, attempt ${GITHUB_RUN_ATTEMPT}" \
+            'Signed with an ephemeral runner debug certificate, not the release upload identity.' \
+            'Do not install over an existing app. Upgrade, device and account flows are not qualified.' \
+            > QUALIFICATION.txt
+          flutter --version >> QUALIFICATION.txt
       - name: Publish installable preview
         # Publication is deliberate only: an explicit workflow_dispatch with
         # publish=true. Pushes to main build, analyze and test but never publish,
@@ -95,4 +123,6 @@ jobs:
           files: |
             release-assets/*.apk
             release-assets/SHA256SUMS.txt
+            release-assets/SIGNING-CERTIFICATE.txt
+            release-assets/QUALIFICATION.txt
           fail_on_unmatched_files: true
