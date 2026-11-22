@@ -4,7 +4,8 @@ import 'package:metly/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('App loads and displays Home screen', (WidgetTester tester) async {
+  testWidgets('App loads and displays Home screen',
+      (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(MetlyApp(prefs: prefs));
@@ -14,7 +15,8 @@ void main() {
     expect(find.text('Enter Dashboard'), findsOneWidget);
   });
 
-  testWidgets('Feedback screen shows hints and submits feedback', (WidgetTester tester) async {
+  testWidgets('Feedback screen shows hints and submits feedback',
+      (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(MetlyApp(prefs: prefs));
@@ -33,7 +35,10 @@ void main() {
     expect(find.text('name@example.com'), findsOneWidget);
     expect(find.text('Share ideas, issues, or suggestions…'), findsOneWidget);
 
-    // Enter message and submit
+    // Enter email and message, then submit
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email (optional)'),
+        'user@example.com');
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Your message'), 'Great app!');
     await tester.tap(find.text('Submit'));
@@ -41,5 +46,9 @@ void main() {
 
     expect(find.text('Thank you! Feedback submitted.'), findsOneWidget);
     expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+
+    // Form inputs should be cleared upon successful submission
+    expect(find.text('user@example.com'), findsNothing);
+    expect(find.text('Great app!'), findsNothing);
   });
 }

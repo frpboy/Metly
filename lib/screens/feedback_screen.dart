@@ -21,6 +21,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Row(children: [
           Icon(Icons.check_circle_outline, color: Cfg.gold),
@@ -28,6 +29,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           Text('Thank you! Feedback submitted.'),
         ]),
         behavior: SnackBarBehavior.floating));
+    _email.clear();
     _message.clear();
   }
 
@@ -49,6 +51,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                           TextFormField(
                             controller: _email,
                             keyboardType: TextInputType.emailAddress,
+                            autofillHints: const [AutofillHints.email],
                             textInputAction: TextInputAction.next,
                             style: const TextStyle(color: Colors.white),
                             decoration: const InputDecoration(
