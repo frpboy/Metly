@@ -149,7 +149,7 @@ jobs:
           test -s "$AAB.age" || { echo "::error::Refusing: encrypted artifact missing."; exit 1; }
       - name: Hash and upload artifact
         if: inputs.upload_artifact == true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: metly-release-aab-${{ steps.meta.outputs.version }}-${{ steps.meta.outputs.build_number }}
           path: |
