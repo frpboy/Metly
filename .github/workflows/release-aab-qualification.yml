@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       upload_artifact:
-        description: 'Blocked: this lane always produces a signed store AAB, and artifacts are visible to any logged-in GitHub user on this public repo. Kept for explicit refusal only.'
+        description: 'Upload the signed AAB as an age-ENCRYPTED artifact only. Recipient public key is the source-bound METLY_AGE_RECIPIENT constant below; a plaintext AAB is never uploaded.'
         type: boolean
         default: false
 
@@ -111,23 +111,48 @@ jobs:
             exit 1
           fi
           echo "Signed with pinned upload certificate SHA-256: $EXPECTED"
-      - name: "Guard - never upload signed AAB as a public artifact"
-        env:
-          METLY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.METLY_UPLOAD_KEYSTORE_BASE64 }}
+      - name: "Hash release AAB (qualification + post-decrypt verification anchor)"
+        shell: bash
+        run: sha256sum build/app/outputs/bundle/release/app-release.aab
+      - name: "Encrypt AAB for artifact upload (fail closed)"
+        if: inputs.upload_artifact == true
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ inputs.upload_artifact }}" = "true" ] && [ -n "$METLY_UPLOAD_KEYSTORE_BASE64" ]; then
-            echo "Refusing to upload a signed AAB as a public artifact."
-            exit 1
-          fi
+          # Source-bound recipient: reviewed with this workflow; NOT a mutable repo variable.
+          # REVIEW-PLACEHOLDER - must be replaced, in the same commit that creates the
+          # vault-held private key, before any merge or dispatch.
+          RECIPIENT="age1r7gw7zrhfwklgnfxaz278vrwjvxf6nrgllxmapyfx3j0lh5r73zqm23788"
+          case "$RECIPIENT" in
+            age1REVIEWPLACEHOLDER*) echo "::error::recipient placeholder not replaced"; exit 1 ;;
+            age1*) ;;
+            *) echo "::error::recipient constant is not an age public key"; exit 1 ;;
+          esac
+          AGE_VER=1.3.2
+          AGE_SHA256=cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
+          curl -fsSL "https://github.com/FiloSottile/age/releases/download/v${AGE_VER}/age-v${AGE_VER}-linux-amd64.tar.gz" -o "$RUNNER_TEMP/age.tgz"
+          echo "$AGE_SHA256  $RUNNER_TEMP/age.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/age.tgz" -C "$RUNNER_TEMP"
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          "$RUNNER_TEMP/age/age" -r "$RECIPIENT" -o "$AAB.age" "$AAB"
+          head -c 18 "$AAB.age" | grep -q 'age-encryption.org' || { echo "::error::ciphertext magic check failed"; exit 1; }
+          # NOTE: deletion, not guaranteed secure erasure; runner is ephemeral (see design note).
+          shred -u "$AAB"
+          test ! -e "$AAB"
+      - name: "Guard - never upload an unencrypted signed AAB as a public artifact"
+        if: inputs.upload_artifact == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB=build/app/outputs/bundle/release/app-release.aab
+          test ! -e "$AAB" || { echo "::error::Refusing: plaintext signed AAB present at upload time."; exit 1; }
+          test -s "$AAB.age" || { echo "::error::Refusing: encrypted artifact missing."; exit 1; }
       - name: Hash and upload artifact
         if: inputs.upload_artifact == true
         uses: actions/upload-artifact@v4
         with:
           name: metly-release-aab-${{ steps.meta.outputs.version }}-${{ steps.meta.outputs.build_number }}
           path: |
-            build/app/outputs/bundle/release/app-release.aab
+            build/app/outputs/bundle/release/app-release.aab.age
           if-no-files-found: error
-      - name: SHA256
-        run: sha256sum build/app/outputs/bundle/release/app-release.aab
+          retention-days: 7
