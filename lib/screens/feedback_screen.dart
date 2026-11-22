@@ -12,6 +12,13 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _message = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _message.addListener(() => setState(() {}));
+  }
+
   @override
   void dispose() {
     _email.dispose();
@@ -74,21 +81,29 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                             validator: (v) => (v == null || v.trim().isEmpty)
                                 ? 'Message required'
                                 : null,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Your message',
-                              labelStyle: TextStyle(color: Colors.white70),
+                              labelStyle: const TextStyle(color: Colors.white70),
                               hintText: 'Share ideas, issues, or suggestions…',
-                              hintStyle: TextStyle(color: Colors.white38),
+                              hintStyle: const TextStyle(color: Colors.white38),
                               alignLabelWithHint: true,
-                              prefixIcon: Padding(
+                              prefixIcon: const Padding(
                                 padding: EdgeInsets.only(bottom: 64),
                                 child: Icon(Icons.chat_bubble_outline,
                                     color: Colors.white54),
                               ),
-                              enabledBorder: OutlineInputBorder(
+                              suffixIcon: _message.text.isNotEmpty
+                                  ? IconButton(
+                                      tooltip: 'Clear message',
+                                      icon: const Icon(Icons.clear,
+                                          color: Colors.white54),
+                                      onPressed: () => _message.clear(),
+                                    )
+                                  : null,
+                              enabledBorder: const OutlineInputBorder(
                                   borderSide:
                                       BorderSide(color: Colors.white24)),
-                              focusedBorder: OutlineInputBorder(
+                              focusedBorder: const OutlineInputBorder(
                                   borderSide: BorderSide(color: Cfg.gold)),
                             ),
                           ),
