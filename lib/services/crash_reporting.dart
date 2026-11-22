@@ -1,0 +1,186 @@
+import 'dart:async';
+
+import 'package:sentry/src/envelope/sentry_envelope_header.dart';
+import 'package:sentry/src/envelope/sentry_item_type.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'package:sentry/src/transport/http_transport.dart';
+import 'package:sentry/src/transport/rate_limiter.dart';
+
+/// Minimal automatic crash/error reporting for Metly.
+///
+/// Error and crash capture only: no performance tracing, profiling,
+/// session tracking, screenshots, view hierarchy or breadcrumbs, and the
+/// native SDKs are explicitly NOT auto-initialized (sentry_flutter
+/// 10.4.0 defaults them ON - verified in the package source), because
+/// native capture is an unqualified path: disabled and labeled, not
+/// sent raw. SDK logs default to a no-op logger (verified in the 10.4.0
+/// source) and are never enabled here.
+///
+/// Boundary: nothing the SDK captured is forwarded. Every captured
+/// event, hint and envelope item is discarded and replaced by ONE fixed
+/// generic event built only from trusted build constants plus a fresh
+/// id and timestamp ([buildGenericEvent]). The transport wrapper
+/// ([EventOnlyTransport]) rebuilds the final envelope the same way at
+/// the last boundary, so anything added after beforeSend - attachments,
+/// extra items, integrations - is dropped as well. There is no content
+/// scanning: the input is never read.
+class MetlyCrashReporting {
+  MetlyCrashReporting._();
+
+  static const _dsn = String.fromEnvironment('METLY_SENTRY_DSN');
+
+  /// Trusted build constant; set with --dart-define=METLY_RELEASE=... .
+  static const _release = String.fromEnvironment('METLY_RELEASE');
+
+  static bool get configured => _dsn.isNotEmpty;
+
+  /// Wraps [appRunner] with Sentry when a DSN is configured at build
+  /// time (--dart-define=METLY_SENTRY_DSN=...). Without it the app runs
+  /// exactly as before with no reporting active.
+  static Future<void> run(FutureOr<void> Function() appRunner) async {
+    if (!configured) {
+      await appRunner();
+      return;
+    }
+    await SentryFlutter.init((options) {
+      options.dsn = _dsn;
+      options.debug = false;
+      options.tracesSampleRate = null;
+      options.sendDefaultPii = false;
+      options.attachScreenshot = false;
+      options.attachViewHierarchy = false;
+      options.enableUserInteractionBreadcrumbs = false;
+      options.enableAppLifecycleBreadcrumbs = false;
+      options.enableAutoSessionTracking = false;
+      options.enableWatchdogTerminationTracking = false;
+      options.autoInitializeNativeSdk = false;
+      options.enableNativeCrashHandling = false;
+      options.attachThreads = false;
+      options.beforeSend = (event, hint) => buildGenericEvent();
+      // Pre-setting a non-noop transport stops the SDK replacing it
+      // (verified in SentryClient source); the SDK still wraps it with
+      // its client-report layer.
+      final rateLimiter = RateLimiter(options);
+      options.transport =
+          EventOnlyTransport(options, HttpTransport(options, rateLimiter), rateLimiter);
+    }, appRunner: appRunner);
+  }
+
+  static Future<void> capture(Object error, StackTrace? stackTrace) async {
+    if (!configured) return;
+    await Sentry.captureException(error, stackTrace: stackTrace);
+  }
+}
+
+/// The only payload ever sent: a fixed generic event built from trusted
+/// build constants (constant level/logger/environment, compile-time
+/// release define) with a fresh random id and current timestamp. No
+/// field, hint, attachment, frame, thread, context, tag, extra or any
+/// other value from the captured input is read or carried over.
+SentryEvent buildGenericEvent() {
+  return SentryEvent(
+    eventId: SentryId.newId(),
+    timestamp: DateTime.now().toUtc(),
+    level: SentryLevel.error,
+    logger: 'app',
+    message: SentryMessage('app error - details withheld by privacy boundary'),
+    exceptions: [SentryException(type: 'AppError', value: null)],
+    release: MetlyCrashReporting._release.isEmpty
+        ? null
+        : MetlyCrashReporting._release,
+    environment: 'production',
+    contexts: Contexts(),
+  );
+}
+
+/// Final boundary: whatever envelope the SDK built is discarded and
+/// replaced by one envelope containing exactly one item - the fixed
+/// generic event - under a fresh header. The incoming envelope and its
+/// items are never forwarded.
+class EventOnlyTransport implements Transport {
+  EventOnlyTransport(this._options, this._inner, this._rateLimiter);
+
+  final SentryOptions _options;
+  final Transport _inner;
+
+  /// Shared with the inner HTTP transport so server-side rate limits
+  /// are checked explicitly here; the HTTP transport only UPDATES the
+  /// limiter from responses, it does not filter (verified in the
+  /// 10.4.0 source).
+  final RateLimiter _rateLimiter;
+
+  static const _minInterval = Duration(minutes: 1);
+  static const _sendDeadline = Duration(seconds: 30);
+  static DateTime _lastSend = DateTime.fromMillisecondsSinceEpoch(0);
+  static bool _inFlight = false;
+
+  @override
+  Future<SentryId?> send(SentryEnvelope envelope) async {
+    // Gate: only an envelope carrying an error/crash event item is
+    // worth reporting. Session, client-report, transaction, log-only
+    // or empty envelopes are dropped, never converted into an error.
+    final hasEvent =
+        envelope.items.any((item) => item.header.type == SentryItemType.event);
+    if (!hasEvent) return envelope.header.eventId;
+    // One send in flight: busy drops instead of queueing. The flag is
+    // taken before the rate check and held across the actual awaited
+    // send below.
+    if (_inFlight) return envelope.header.eventId;
+    _inFlight = true;
+    try {
+      // Local rate cap: at most one send per minute, shared across
+      // instances; a burst is dropped, not queued.
+      final now = DateTime.now();
+      if (now.difference(_lastSend) < _minInterval) {
+        return envelope.header.eventId;
+      }
+      _lastSend = now;
+      final event = buildGenericEvent();
+      final item = SentryEnvelopeItem.fromEvent(event);
+      final out = SentryEnvelope(
+        SentryEnvelopeHeader(event.eventId, null),
+        [item],
+      );
+      // Explicitly apply server rate limits: dropped, not sent.
+      if (_rateLimiter.filter(out) == null) return envelope.header.eventId;
+      // Bounded overall deadline with real cancellation: the send runs
+      // against a per-send HTTP client that is closed on timeout, which
+      // aborts the underlying connection instead of leaving it running.
+      final client = _BoundedClient(http.Client());
+      _options.httpClient = client;
+      final sendFuture = _inner.send(out);
+      // After the deadline the future is abandoned and the client is
+      // closed in finally, aborting the underlying connection; swallow
+      // the late error so nothing surfaces as unhandled.
+      sendFuture.catchError((_) => null);
+      try {
+        return await sendFuture.timeout(_sendDeadline,
+            onTimeout: () => envelope.header.eventId);
+      } finally {
+        client.close();
+      }
+    } finally {
+      _inFlight = false;
+    }
+  }
+}
+
+/// Per-send HTTP client: redirects disabled explicitly, and closing it
+/// aborts the in-flight connection (real cancellation on the send
+/// deadline, not just an abandoned future).
+class _BoundedClient extends http.BaseClient {
+  _BoundedClient(this._inner);
+
+  final http.Client _inner;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    request.followRedirects = false;
+    request.maxRedirects = 0;
+    return _inner.send(request);
+  }
+
+  @override
+  void close() => _inner.close();
+}

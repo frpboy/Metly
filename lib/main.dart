@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
+import 'services/crash_reporting.dart';
 import 'services/auth_bootstrap.dart';
 
 import 'config/app_config.dart';
@@ -16,12 +17,15 @@ import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // Resolve persisted Firebase Auth state before any route reads current.
-  final authReady =
-      await waitForInitialAuthState(metlyDefaultAuth().authChanges());
-  final prefs = await SharedPreferences.getInstance();
-  runApp(MetlyApp(prefs: prefs, initialAuthReady: authReady));
+  // No-op wrapper unless METLY_SENTRY_DSN is set at build time.
+  await MetlyCrashReporting.run(() async {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    // Resolve persisted Firebase Auth state before any route reads current.
+    final authReady =
+        await waitForInitialAuthState(metlyDefaultAuth().authChanges());
+    final prefs = await SharedPreferences.getInstance();
+    runApp(MetlyApp(prefs: prefs, initialAuthReady: authReady));
+  });
 }
 
 class MetlyApp extends StatelessWidget {
