@@ -20,6 +20,7 @@ export default {
             "access-control-allow-headers": "authorization,content-type",
             "access-control-allow-methods": "GET,POST,OPTIONS",
             "x-content-type-options": "nosniff",
+            "x-frame-options": "DENY",
         };
         if (req.method === "OPTIONS") {
             return new Response(null, { headers: cors });
@@ -34,10 +35,18 @@ export default {
             });
         }
 
+        // endpoint accepts POST only for completions
+        if (req.method !== "POST") {
+            return new Response(JSON.stringify({ error: "Method not allowed" }), {
+                status: 405,
+                headers: { "content-type": "application/json", ...cors },
+            });
+        }
+
         // auth: require proxy token header using timing-safe comparison
         const incomingToken = req.headers.get("authorization") || "";
         const bearer = incomingToken.startsWith("Bearer ") ? incomingToken.slice(7) : incomingToken;
-        if (!env.METLY_PROXY_TOKEN) {
+        if (!env.METLY_PROXY_TOKEN || !env.OPENROUTER_API_KEY) {
             return new Response(JSON.stringify({ error: "Proxy not configured" }), {
                 status: 500,
                 headers: { "content-type": "application/json", ...cors },
@@ -50,9 +59,9 @@ export default {
             });
         }
 
-        // forward to OpenRouter
+        // validate payload is a non-null JSON object before forwarding to OpenRouter
         const body = await req.json().catch(() => null);
-        if (!body) {
+        if (!body || typeof body !== "object" || Array.isArray(body)) {
             return new Response(JSON.stringify({ error: "Invalid JSON" }), {
                 status: 400,
                 headers: { "content-type": "application/json", ...cors },

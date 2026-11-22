@@ -110,6 +110,50 @@ async function runTests() {
     assert.equal(res.status, 500);
   }
 
+  // Test 8: Missing OPENROUTER_API_KEY in env returns 500
+  {
+    const req = new Request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "authorization": `Bearer ${env.METLY_PROXY_TOKEN}`,
+      },
+      body: JSON.stringify({ model: "test" }),
+    });
+    const res = await worker.fetch(req, { METLY_PROXY_TOKEN: env.METLY_PROXY_TOKEN }, {});
+    assert.equal(res.status, 500);
+  }
+
+  // Test 9: Non-POST method (e.g. GET) returns 405 Method Not Allowed
+  {
+    const req = new Request("http://localhost/v1/chat/completions", {
+      method: "GET",
+      headers: {
+        "authorization": `Bearer ${env.METLY_PROXY_TOKEN}`,
+      },
+    });
+    const res = await worker.fetch(req, env, {});
+    assert.equal(res.status, 405);
+    const body = await res.json();
+    assert.equal(body.error, "Method not allowed");
+  }
+
+  // Test 10: Non-object payload returns 400 Invalid JSON
+  {
+    const req = new Request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "authorization": `Bearer ${env.METLY_PROXY_TOKEN}`,
+      },
+      body: JSON.stringify(["not-an-object"]),
+    });
+    const res = await worker.fetch(req, env, {});
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.error, "Invalid JSON");
+  }
+
   console.log("All ai-proxy worker security and auth tests passed!");
 }
 
