@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('App loads and displays Home screen', (WidgetTester tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues(
+      {'onboarding_complete_v1': true});
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(MetlyApp(prefs: prefs));
     await tester.pumpAndSettle();
@@ -15,7 +16,8 @@ void main() {
   });
 
   testWidgets('Feedback screen shows hints and submits feedback', (WidgetTester tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues(
+      {'onboarding_complete_v1': true});
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(MetlyApp(prefs: prefs));
     await tester.pumpAndSettle();
